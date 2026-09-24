@@ -16,7 +16,7 @@ const VALID_STATUSES: ConversationStatus[] = [
 ];
 
 const VALID_CATEGORIES: ConversationCategory[] = [
-  'user-story', 'bug', 'feature', 'improvement', 'task'
+  'bug', 'improvement', 'report', 'task'
 ];
 
 const MAX_COMMAND_AGE_MS = 5 * 60 * 1000;

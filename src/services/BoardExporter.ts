@@ -77,9 +77,8 @@ export function exportToTrelloJson(conversations: Conversation[], boardName: str
 
   const categoryLabels: Record<ConversationCategory, { name: string; color: string }> = {
     'bug': { name: 'Bug', color: 'red' },
-    'user-story': { name: 'User Story', color: 'blue' },
-    'feature': { name: 'Feature', color: 'green' },
     'improvement': { name: 'Improvement', color: 'yellow' },
+    'report': { name: 'Report', color: 'blue' },
     'task': { name: 'Task', color: 'black' },
   };
 

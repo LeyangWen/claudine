@@ -8,6 +8,10 @@ interface ClassificationRule {
   weight: number;
 }
 
+/** A category name at the head of a title, optionally bracketed and followed
+ *  by a separator: "Bug - ...", "[Report] ...", "(task) ...", "#improvement". */
+const EXPLICIT_LABEL = /^\s*[\[(#]?\s*(bug|improvement|report|task)s?\s*[\])]?\s*(?:[:\-–—|\/]|\s|$)/i;
+
 export class CategoryClassifier {
   private _rules: ClassificationRule[] = [
     {
@@ -26,33 +30,22 @@ export class CategoryClassifier {
       weight: 10
     },
     {
-      category: 'user-story',
+      category: 'report',
       keywords: [
-        'as a user', 'i want', 'so that', 'user can', 'users should',
-        'user story', 'user experience', 'ux', 'customer'
+        'report', 'analysis', 'analyze', 'investigate', 'investigation',
+        'benchmark', 'benchmarking', 'summary', 'summarize', 'write-up',
+        'writeup', 'findings', 'survey', 'audit', 'metrics', 'comparison'
       ],
       patterns: [
-        /as\s+a\s+(user|developer|admin)/i,
-        /i\s+want\s+to/i,
-        /so\s+that\s+i\s+can/i,
-        /user\s+(can|should|will)/i
+        /\breport\b/i,
+        /write[\s-]?up/i,
+        /(analy[sz]e|analysis)\b/i,
+        /investigat(e|ion)\b/i,
+        /benchmark(ing|s)?\b/i,
+        /summar(y|ize|ise)\b/i,
+        /\bfindings\b/i
       ],
-      weight: 10
-    },
-    {
-      category: 'feature',
-      keywords: [
-        'add', 'create', 'implement', 'build', 'new', 'feature',
-        'functionality', 'capability', 'support for'
-      ],
-      patterns: [
-        /add\s+(a\s+)?(new\s+)?feature/i,
-        /implement\s+\w+/i,
-        /create\s+(a\s+)?(new\s+)?/i,
-        /build\s+(a\s+)?/i,
-        /new\s+functionality/i
-      ],
-      weight: 8
+      weight: 9
     },
     {
       category: 'improvement',
@@ -93,6 +86,11 @@ export class CategoryClassifier {
     description: string,
     messages: ParsedMessage[]
   ): ConversationCategory {
+    // An explicit label at the head of the title wins: "Report - ...",
+    // "[Bug] ...", "Task: ...", "#improvement ...".
+    const explicit = EXPLICIT_LABEL.exec(title || '');
+    if (explicit) return explicit[1].toLowerCase() as ConversationCategory;
+
     const text = this.extractText(title, description, messages);
     const scores = this.calculateScores(text);
 
@@ -130,9 +128,8 @@ export class CategoryClassifier {
   private calculateScores(text: string): Record<ConversationCategory, number> {
     const scores: Record<ConversationCategory, number> = {
       'bug': 0,
-      'user-story': 0,
-      'feature': 0,
       'improvement': 0,
+      'report': 0,
       'task': 0
     };
 
@@ -162,23 +159,22 @@ export class CategoryClassifier {
 
   public getCategoryColor(category: ConversationCategory): string {
     const colors: Record<ConversationCategory, string> = {
-      'bug': '#ef4444',       // Red
-      'user-story': '#3b82f6', // Blue
-      'feature': '#10b981',    // Green
+      'bug': '#ef4444',         // Red
       'improvement': '#f59e0b', // Yellow/Amber
-      'task': '#6b7280'        // Gray
+      'report': '#3b82f6',      // Blue
+      'task': '#6b7280'         // Gray
     };
-    return colors[category];
+    // Saved boards can still hold categories this version no longer has
+    return colors[category] || colors.task;
   }
 
   public getCategoryIcon(category: ConversationCategory): string {
     const icons: Record<ConversationCategory, string> = {
       'bug': '🐛',
-      'user-story': '👤',
-      'feature': '✨',
       'improvement': '📈',
+      'report': '📊',
       'task': '📋'
     };
-    return icons[category];
+    return icons[category] || icons.task;
   }
 }

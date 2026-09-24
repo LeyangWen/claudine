@@ -136,7 +136,7 @@ class VSCodeAPIWrapper {
 export const vscode = new VSCodeAPIWrapper();
 
 // Message types (matching the extension types)
-export type ConversationCategory = 'user-story' | 'bug' | 'feature' | 'improvement' | 'task';
+export type ConversationCategory = 'bug' | 'improvement' | 'report' | 'task';
 export type ConversationStatus = 'todo' | 'needs-input' | 'in-progress' | 'in-review' | 'done' | 'cancelled' | 'archived';
 
 export interface Agent {

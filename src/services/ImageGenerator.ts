@@ -162,9 +162,8 @@ export class ImageGenerator {
   public generatePlaceholderIcon(conversationId: string, category: string): string {
     const colors: Record<string, string> = {
       'bug': '#ef4444',
-      'user-story': '#3b82f6',
-      'feature': '#10b981',
       'improvement': '#f59e0b',
+      'report': '#3b82f6',
       'task': '#6b7280'
     };
 

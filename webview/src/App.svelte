@@ -27,7 +27,7 @@
   let aboutOpen = false;
   let showArchive = false;
 
-  const allCategories: ConversationCategory[] = ['bug', 'user-story', 'feature', 'improvement', 'task'];
+  const allCategories: ConversationCategory[] = ['bug', 'improvement', 'report', 'task'];
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
   // Debounce search queries → extension for JSONL full-text search

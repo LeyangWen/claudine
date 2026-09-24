@@ -340,13 +340,13 @@ export function getCategoryDetails(category: Conversation['category']): {
 } {
   const categories: Record<Conversation['category'], { icon: string; color: string; label: string }> = {
     'bug': { icon: '🐛', color: '#ef4444', label: 'Bug' },
-    'user-story': { icon: '👤', color: '#3b82f6', label: 'User Story' },
-    'feature': { icon: '✨', color: '#10b981', label: 'Feature' },
     'improvement': { icon: '📈', color: '#f59e0b', label: 'Improvement' },
+    'report': { icon: '📊', color: '#3b82f6', label: 'Report' },
     'task': { icon: '📋', color: '#6b7280', label: 'Task' }
   };
 
-  return categories[category];
+  // Saved boards can still hold categories this version no longer has
+  return categories[category] || categories.task;
 }
 
 // Actions

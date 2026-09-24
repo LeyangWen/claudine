@@ -26,16 +26,23 @@ describe('CategoryClassifier', () => {
       expect(classifier.classify('Button not working', '', [])).toBe('bug');
     });
 
-    it('classifies user-story conversations', () => {
-      expect(classifier.classify('As a user I want to login', '', [])).toBe('user-story');
-      expect(classifier.classify('User can reset password', '', [])).toBe('user-story');
-      expect(classifier.classify('So that I can access the dashboard', '', [])).toBe('user-story');
+    it('classifies report conversations', () => {
+      expect(classifier.classify('Benchmark the new parser', '', [])).toBe('report');
+      expect(classifier.classify('Investigate slow startup and write up findings', '', [])).toBe('report');
+      expect(classifier.classify('Summarize the audit results', '', [])).toBe('report');
     });
 
-    it('classifies feature conversations', () => {
-      expect(classifier.classify('Add new feature for dark mode', '', [])).toBe('feature');
-      expect(classifier.classify('Implement authentication', '', [])).toBe('feature');
-      expect(classifier.classify('Create a new dashboard', '', [])).toBe('feature');
+    it('lets an explicit label at the head of the title win', () => {
+      expect(classifier.classify('Report - fix rate by week', '', [])).toBe('report');
+      expect(classifier.classify('[Bug] optimize the cache', '', [])).toBe('bug');
+      expect(classifier.classify('Task: benchmark the parser', '', [])).toBe('task');
+      expect(classifier.classify('#improvement crash reporting', '', [])).toBe('improvement');
+      expect(classifier.classify('Bugs | login', '', [])).toBe('bug');
+    });
+
+    it('does not read a label out of a longer word', () => {
+      expect(classifier.classify('Taskbar icon setup', '', [])).toBe('task');
+      expect(classifier.classify('Reporter crashes on startup', '', [])).toBe('bug');
     });
 
     it('classifies improvement conversations', () => {
@@ -75,8 +82,7 @@ describe('CategoryClassifier', () => {
     });
 
     it('higher-weight categories win ties', () => {
-      // "fix" is bug keyword (weight 10), "add" is feature keyword (weight 8)
-      // Single keyword match: bug scores 1*10=10, feature scores 1*8=8
+      // "fix" is a bug keyword (weight 10); nothing else matches
       expect(classifier.classify('fix something', '', [])).toBe('bug');
     });
 
@@ -90,19 +96,19 @@ describe('CategoryClassifier', () => {
   describe('getCategoryColor', () => {
     it('returns correct colors for each category', () => {
       expect(classifier.getCategoryColor('bug')).toBe('#ef4444');
-      expect(classifier.getCategoryColor('user-story')).toBe('#3b82f6');
-      expect(classifier.getCategoryColor('feature')).toBe('#10b981');
       expect(classifier.getCategoryColor('improvement')).toBe('#f59e0b');
+      expect(classifier.getCategoryColor('report')).toBe('#3b82f6');
       expect(classifier.getCategoryColor('task')).toBe('#6b7280');
+      // categories from older saved boards fall back to task
+      expect(classifier.getCategoryColor('feature' as never)).toBe('#6b7280');
     });
   });
 
   describe('getCategoryIcon', () => {
     it('returns correct icons for each category', () => {
       expect(classifier.getCategoryIcon('bug')).toBe('\u{1F41B}');
-      expect(classifier.getCategoryIcon('user-story')).toBe('\u{1F464}');
-      expect(classifier.getCategoryIcon('feature')).toBe('\u2728');
       expect(classifier.getCategoryIcon('improvement')).toBe('\u{1F4C8}');
+      expect(classifier.getCategoryIcon('report')).toBe('\u{1F4CA}');
       expect(classifier.getCategoryIcon('task')).toBe('\u{1F4CB}');
     });
   });
