@@ -302,9 +302,11 @@ export class ClaudeCodeWatcher {
   /**
    * Encode a workspace path the same way Claude Code does.
    * /Users/matthias/Development/foo → -Users-matthias-Development-foo
+   * Claude Code also replaces dots, so /Users/a/.claude/worktrees/x becomes
+   * -Users-a--claude-worktrees-x; encoding only slashes misses those projects.
    */
   private encodeWorkspacePath(workspacePath: string): string {
-    return workspacePath.replace(/\//g, '-');
+    return workspacePath.replace(/[\/.]/g, '-');
   }
 
   // ── Project discovery & progressive scanning (standalone) ─────────
