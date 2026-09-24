@@ -44,6 +44,8 @@ function createMockStorage() {
     saveBoardState: vi.fn().mockResolvedValue(undefined),
     loadDrafts: vi.fn().mockResolvedValue([]),
     saveDrafts: vi.fn().mockResolvedValue(undefined),
+    readStarred: vi.fn().mockReturnValue({}),
+    writeStarred: vi.fn(),
   };
 }
 
@@ -55,6 +57,8 @@ vi.mock('../services/StorageService', () => {
       saveBoardState = vi.fn().mockResolvedValue(undefined);
       loadDrafts = vi.fn().mockResolvedValue([]);
       saveDrafts = vi.fn().mockResolvedValue(undefined);
+      readStarred = vi.fn().mockReturnValue({});
+      writeStarred = vi.fn();
     },
   };
 });
@@ -382,6 +386,37 @@ describe('StateManager', () => {
       await stateManager.clearAllIcons();
       expect(stateManager.getConversation('a')!.icon).toBeUndefined();
       expect(stateManager.getConversation('b')!.icon).toBeUndefined();
+    });
+  });
+
+  describe('stars', () => {
+    it('stars a conversation and persists its title and workspace', () => {
+      stateManager.setConversations([makeConversation({ workspacePath: '/work/repo' })]);
+      stateManager.toggleStar('conv-1');
+
+      expect(stateManager.getConversation('conv-1')!.starred).toBe(true);
+      const written = mockStorage.writeStarred.mock.calls[0][0];
+      expect(Object.keys(written)).toEqual(['conv-1']);
+      expect(written['conv-1']).toMatchObject({ title: 'Test Conversation', workspacePath: '/work/repo' });
+    });
+
+    it('unstars on a second toggle', () => {
+      stateManager.setConversations([makeConversation()]);
+      mockStorage.readStarred.mockReturnValue({ 'conv-1': { title: 'x', workspacePath: '', starredAt: '' } });
+      stateManager.toggleStar('conv-1');
+
+      expect(stateManager.getConversation('conv-1')!.starred).toBeUndefined();
+      expect(mockStorage.writeStarred).toHaveBeenLastCalledWith({});
+    });
+
+    it('picks up stars written by another window on the next scan', () => {
+      mockStorage.readStarred.mockReturnValue({ 'conv-1': { title: 'x', workspacePath: '', starredAt: '' } });
+      stateManager.setConversations([makeConversation()]);
+      expect(stateManager.getConversation('conv-1')!.starred).toBe(true);
+
+      mockStorage.readStarred.mockReturnValue({});
+      stateManager.setConversations([makeConversation()]);
+      expect(stateManager.getConversation('conv-1')!.starred).toBeUndefined();
     });
   });
 

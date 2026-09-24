@@ -1,6 +1,6 @@
 <script lang="ts">
   import { vscode, type Conversation } from '../lib/vscode';
-  import { getCategoryDetails, toggleCardCollapsed, settings } from '../stores/conversations';
+  import { getCategoryDetails, toggleCardCollapsed, settings, upsertConversation } from '../stores/conversations';
   import AgentAvatar from './AgentAvatar.svelte';
   import PromptInput from './PromptInput.svelte';
 
@@ -122,6 +122,16 @@
     toggleCardCollapsed(conversation.id);
   }
 
+  function handleToggleStar(e: MouseEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    if (conversation.isDraft) return;
+    vscode.postMessage({ type: 'toggleStar', conversationId: conversation.id });
+    // Optimistic update. Board columns come from their own store, so go
+    // through upsertConversation rather than updating `conversations` alone.
+    upsertConversation({ ...conversation, starred: !conversation.starred });
+  }
+
   function handleOpenConversation() {
     if (vscode.isStandalone) {
       openMenuVisible = !openMenuVisible;
@@ -200,6 +210,9 @@
     <div class="drag-handle narrow-drag" title="Drag to move">
       <svg viewBox="0 0 6 10" fill="currentColor"><circle cx="1.5" cy="1.5" r="1"/><circle cx="4.5" cy="1.5" r="1"/><circle cx="1.5" cy="5" r="1"/><circle cx="4.5" cy="5" r="1"/><circle cx="1.5" cy="8.5" r="1"/><circle cx="4.5" cy="8.5" r="1"/></svg>
     </div>
+    {#if conversation.starred}
+      <span class="narrow-star" title="Starred">★</span>
+    {/if}
     {#if conversation.icon}
       <img class="narrow-icon" src={conversation.icon} alt="" />
     {:else}
@@ -295,6 +308,16 @@
     {#if isFirst}
       <span class="first-badge" title="This is were it all started for this project">Genesis</span>
     {/if}
+    <button
+      class="star-btn"
+      class:starred={conversation.starred}
+      on:click={handleToggleStar}
+      title={conversation.starred ? 'Unstar conversation' : 'Star conversation'}
+      aria-label={conversation.starred ? 'Unstar conversation' : 'Star conversation'}
+      aria-pressed={!!conversation.starred}
+    >
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.4l1.7 4.65 4.96.19-3.9 3.06 1.35 4.76L8 11.3l-4.11 2.76 1.35-4.76-3.9-3.06 4.96-.19z"/></svg>
+    </button>
     <button class="collapse-toggle" on:click={handleToggleCollapse} title="Expand card">
       <svg viewBox="0 0 16 16" fill="currentColor"><path d="M5.7 13.7L5 13l4.6-4.6L5 3.7l.7-.7 5.3 5.3-5.3 5.4z"/></svg>
     </button>
@@ -365,6 +388,16 @@
       {#if showTimer}
         <span class="activity-timer" class:paused={!isActive}>{timerDisplay}</span>
       {/if}
+      <button
+        class="star-btn"
+        class:starred={conversation.starred}
+        on:click={handleToggleStar}
+        title={conversation.starred ? 'Unstar conversation' : 'Star conversation'}
+        aria-label={conversation.starred ? 'Unstar conversation' : 'Star conversation'}
+        aria-pressed={!!conversation.starred}
+      >
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.4l1.7 4.65 4.96.19-3.9 3.06 1.35 4.76L8 11.3l-4.11 2.76 1.35-4.76-3.9-3.06 4.96-.19z"/></svg>
+      </button>
       <button class="collapse-toggle" on:click={handleToggleCollapse} title="Collapse card">
         <svg viewBox="0 0 16 16" fill="currentColor"><path d="M10.3 2.3L11 3 6.4 7.6 11 12.3l-.7.7L5 7.7l5.3-5.4z"/></svg>
       </button>
@@ -737,6 +770,28 @@
     display: flex; align-items: center; justify-content: center;
   }
   .collapse-toggle svg { width: 12px; height: 12px; }
+
+  .star-btn {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    color: var(--vscode-disabledForeground, #6b6b6b);
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .star-btn svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linejoin: round; }
+  .task-card:hover .star-btn { opacity: 0.6; }
+  .star-btn:hover, .star-btn:focus-visible { opacity: 1 !important; color: #eab308; }
+  .star-btn.starred { opacity: 1; color: #eab308; }
+  .star-btn.starred svg { fill: currentColor; }
+  .narrow-star { color: #eab308; font-size: 10px; line-height: 1; text-align: center; }
   .task-card:hover .collapse-toggle { opacity: 0.6; }
   .collapse-toggle:hover { opacity: 1 !important; color: var(--vscode-foreground, #cccccc); }
 

@@ -17,7 +17,7 @@
     restoreColumnWidths,
     restorePaneHeights
   } from './stores/conversations';
-  import type { Conversation, ConversationCategory } from './lib/vscode';
+  import type { Conversation, CategoryFilter } from './lib/vscode';
   import { localeStrings, t } from './stores/locale';
   import { themePreference, resolvedTheme, cycleTheme } from './stores/theme';
 
@@ -27,7 +27,7 @@
   let aboutOpen = false;
   let showArchive = false;
 
-  const allCategories: ConversationCategory[] = ['bug', 'improvement', 'report', 'task'];
+  const allCategories: CategoryFilter[] = ['starred', 'bug', 'improvement', 'report', 'task'];
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
   // Debounce search queries → extension for JSONL full-text search

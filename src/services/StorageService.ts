@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import { IPlatformAdapter } from '../platform/IPlatformAdapter';
 import { Conversation } from '../types';
@@ -5,6 +6,12 @@ import { Conversation } from '../types';
 interface BoardState {
   conversations: Conversation[];
   lastUpdated: Date;
+}
+
+export interface StarredEntry {
+  title: string;
+  workspacePath: string;
+  starredAt: string;
 }
 
 export class StorageService {
@@ -56,6 +63,31 @@ export class StorageService {
       return iconPath;
     }
     return undefined;
+  }
+
+  // Starred conversations. Kept in one file in global storage, not in the
+  // per-workspace board, so a star shows in every window. Read synchronously
+  // because the state manager applies stars inside synchronous merges.
+
+  private get starredPath(): string {
+    return path.join(this._globalStoragePath, 'starred.json');
+  }
+
+  public readStarred(): Record<string, StarredEntry> {
+    try {
+      const data = JSON.parse(fs.readFileSync(this.starredPath, 'utf-8'));
+      if (data && data.starred && typeof data.starred === 'object') return data.starred;
+    } catch {
+      // Missing or unreadable file: nothing starred
+    }
+    return {};
+  }
+
+  public writeStarred(starred: Record<string, StarredEntry>): void {
+    fs.mkdirSync(this._globalStoragePath, { recursive: true });
+    const tmp = `${this.starredPath}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify({ version: 1, starred }, null, 2));
+    fs.renameSync(tmp, this.starredPath);
   }
 
   // Workspace storage methods (for project-specific data)

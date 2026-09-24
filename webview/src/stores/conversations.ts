@@ -1,6 +1,6 @@
 import { writable, derived, get } from 'svelte/store';
 import { vscode } from '../lib/vscode';
-import type { Conversation, ConversationStatus, ConversationCategory, ClaudineSettings, ProjectGroup, IndexingPhase, ProjectManifestEntry } from '../lib/vscode';
+import type { Conversation, ConversationStatus, CategoryFilter, ClaudineSettings, ProjectGroup, IndexingPhase, ProjectManifestEntry } from '../lib/vscode';
 import { t } from './locale';
 
 // Main conversations store
@@ -53,10 +53,11 @@ export const focusedConversationId = writable<string | null>(null);
 export const compactView = writable(false);
 export const collapsedCardIds = writable<Set<string>>(new Set());
 
-// Category filter: empty set = show all, non-empty = show only selected categories
-export const activeCategories = writable<Set<ConversationCategory>>(new Set());
+// Category filter: empty set = show all, non-empty = show only selected
+// categories. "starred" narrows further: starred cards of those categories.
+export const activeCategories = writable<Set<CategoryFilter>>(new Set());
 
-export function toggleCategory(cat: ConversationCategory) {
+export function toggleCategory(cat: CategoryFilter) {
   activeCategories.update(set => {
     const next = new Set(set);
     if (next.has(cat)) next.delete(cat);
@@ -333,12 +334,13 @@ export const archiveColumn = derived(t, ($t) => ({
 }));
 
 // Helper function to get category details
-export function getCategoryDetails(category: Conversation['category']): {
+export function getCategoryDetails(category: CategoryFilter): {
   icon: string;
   color: string;
   label: string;
 } {
-  const categories: Record<Conversation['category'], { icon: string; color: string; label: string }> = {
+  const categories: Record<CategoryFilter, { icon: string; color: string; label: string }> = {
+    'starred': { icon: '⭐', color: '#eab308', label: 'Starred' },
     'bug': { icon: '🐛', color: '#ef4444', label: 'Bug' },
     'improvement': { icon: '📈', color: '#f59e0b', label: 'Improvement' },
     'report': { icon: '📊', color: '#3b82f6', label: 'Report' },

@@ -110,9 +110,15 @@
     }
   }
 
-  function isVisible(id: string, matchIds: Set<string> | null, mode: string, category: string, catFilter: Set<string>): boolean {
-    // Category filter: if active, hide non-matching categories
-    if (catFilter.size > 0 && !catFilter.has(category)) return false;
+  function isVisible(id: string, matchIds: Set<string> | null, mode: string, conversation: Conversation, catFilter: Set<string>): boolean {
+    // Category filter: if active, hide non-matching categories. "starred" is
+    // ANDed with the categories: Starred + Bug shows only starred bugs.
+    if (catFilter.size > 0) {
+      const starredOnly = catFilter.has('starred');
+      if (starredOnly && !conversation.starred) return false;
+      const categoryChips = catFilter.size - (starredOnly ? 1 : 0);
+      if (categoryChips > 0 && !catFilter.has(conversation.category)) return false;
+    }
     if (!matchIds) return true;
     if (mode === 'hide') return matchIds.has(id);
     return true;
@@ -259,7 +265,7 @@
           on:finalize={(e) => handleDndFinalize(column.id, e)}
         >
           {#each boardItems[column.id] as conversation (conversation.id)}
-            {#if isVisible(conversation.id, $searchMatchIds, $searchMode, conversation.category, $activeCategories)}
+            {#if isVisible(conversation.id, $searchMatchIds, $searchMode, conversation, $activeCategories)}
               <div class:faded={isFaded(conversation.id, $searchMatchIds, $searchMode)}>
                 <TaskCard {conversation} compact={isCompact(conversation.id, conversation.status, $compactView, $collapsedCardIds, $searchMatchIds)} narrow={narrowColumns[column.id] || false} searchQuery={$searchQuery} focused={$focusedConversationId === conversation.id} isFirst={conversation.id === $firstConversationId} on:sendDraft={(e) => sendDraft(e.detail)} on:deleteDraft={(e) => removeDraft(e.detail)} on:updateDraft={(e) => updateDraft(e.detail.id, e.detail.title)} />
               </div>
@@ -281,7 +287,7 @@
               on:finalize={(e) => handleDndFinalize('cancelled', e)}
             >
               {#each boardItems['cancelled'] as conversation (conversation.id)}
-                {#if isVisible(conversation.id, $searchMatchIds, $searchMode, conversation.category, $activeCategories)}
+                {#if isVisible(conversation.id, $searchMatchIds, $searchMode, conversation, $activeCategories)}
                   <div class:faded={isFaded(conversation.id, $searchMatchIds, $searchMode)}>
                     <TaskCard {conversation} compact={isCompact(conversation.id, conversation.status, $compactView, $collapsedCardIds, $searchMatchIds)} narrow={narrowColumns[column.id] || false} searchQuery={$searchQuery} focused={$focusedConversationId === conversation.id} isFirst={conversation.id === $firstConversationId} on:sendDraft={(e) => sendDraft(e.detail)} on:deleteDraft={(e) => removeDraft(e.detail)} on:updateDraft={(e) => updateDraft(e.detail.id, e.detail.title)} />
                   </div>
@@ -310,7 +316,7 @@
           on:finalize={(e) => handleDndFinalize('archived', e)}
         >
           {#each boardItems['archived'] as conversation (conversation.id)}
-            {#if isVisible(conversation.id, $searchMatchIds, $searchMode, conversation.category, $activeCategories)}
+            {#if isVisible(conversation.id, $searchMatchIds, $searchMode, conversation, $activeCategories)}
               <div class:faded={isFaded(conversation.id, $searchMatchIds, $searchMode)}>
                 <TaskCard {conversation} compact={isCompact(conversation.id, conversation.status, $compactView, $collapsedCardIds, $searchMatchIds)} searchQuery={$searchQuery} focused={$focusedConversationId === conversation.id} isFirst={conversation.id === $firstConversationId} on:sendDraft={(e) => sendDraft(e.detail)} on:deleteDraft={(e) => removeDraft(e.detail)} on:updateDraft={(e) => updateDraft(e.detail.id, e.detail.title)} />
               </div>

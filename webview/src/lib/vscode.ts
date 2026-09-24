@@ -137,6 +137,8 @@ export const vscode = new VSCodeAPIWrapper();
 
 // Message types (matching the extension types)
 export type ConversationCategory = 'bug' | 'improvement' | 'report' | 'task';
+/** A filter-bar chip: a category, or "starred" (ANDed with any categories). */
+export type CategoryFilter = ConversationCategory | 'starred';
 export type ConversationStatus = 'todo' | 'needs-input' | 'in-progress' | 'in-review' | 'done' | 'cancelled' | 'archived';
 
 export interface Agent {
@@ -173,6 +175,7 @@ export interface Conversation {
   sidechainSteps?: SidechainStep[];
   icon?: string;
   isDraft?: boolean;
+  starred?: boolean;
   originalTitle?: string;
   originalDescription?: string;
   createdAt: Date | string;

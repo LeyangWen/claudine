@@ -41,6 +41,8 @@ export interface Conversation {
   referencedImage?: string;
   originalTitle?: string;
   originalDescription?: string;
+  /** Starred by the user. Persisted in starred.json, shared by all windows. */
+  starred?: boolean;
   createdAt: Date;
   updatedAt: Date;
   filePath?: string;
@@ -103,6 +105,7 @@ export type WebviewToExtensionMessage =
   | { type: 'openConversation'; conversationId: string }
   | { type: 'openConversationAs'; conversationId: string; target: OpenConversationTarget }
   | { type: 'openGitBranch'; conversationId: string; branch?: string }
+  | { type: 'toggleStar'; conversationId: string }
   | { type: 'moveConversation'; conversationId: string; newStatus: ConversationStatus }
   | { type: 'refreshConversations' }
   | { type: 'toggleSummarization' }

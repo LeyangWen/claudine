@@ -21,6 +21,7 @@ export class StateManager {
   private _saveTimer: ReturnType<typeof setTimeout> | undefined;
   private _notifyTimer: ReturnType<typeof setTimeout> | undefined;
   private _sortedCache: Conversation[] | null = null;
+  private _starred: Set<string> | null = null;
 
   constructor(
     private readonly _storageService: StorageService,
@@ -49,6 +50,8 @@ export class StateManager {
           });
         }
       }
+      this.reloadStars();
+      for (const conv of this._conversations.values()) this.applyStar(conv);
     } finally {
       this._readyResolve();
     }
@@ -91,6 +94,9 @@ export class StateManager {
   }
 
   public setConversations(conversations: Conversation[]) {
+    // Another window may have starred or unstarred something
+    this.reloadStars();
+
     // Build the new set of IDs from the scan results
     const scannedIds = new Set(conversations.map(c => c.id));
 
@@ -117,6 +123,41 @@ export class StateManager {
     }
 
     this.archiveStaleConversations();
+    this.invalidateSort();
+    this.notifyChange();
+    this.scheduleSave();
+  }
+
+  private reloadStars() {
+    this._starred = new Set(Object.keys(this._storageService.readStarred()));
+  }
+
+  private applyStar(conv: Conversation) {
+    if (!this._starred) this.reloadStars();
+    if (this._starred!.has(conv.id)) conv.starred = true;
+    else delete conv.starred;
+  }
+
+  /** Star or unstar a conversation and persist it for every window. */
+  public toggleStar(conversationId: string) {
+    const starred = this._storageService.readStarred();
+    if (starred[conversationId]) {
+      delete starred[conversationId];
+    } else {
+      const conv = this._conversations.get(conversationId);
+      starred[conversationId] = {
+        title: conv?.title ?? '',
+        workspacePath: conv?.workspacePath ?? '',
+        starredAt: new Date().toISOString(),
+      };
+    }
+    try {
+      this._storageService.writeStarred(starred);
+    } catch (error) {
+      console.error('Claudine: Error saving starred conversations', error);
+    }
+    this._starred = new Set(Object.keys(starred));
+    for (const conv of this._conversations.values()) this.applyStar(conv);
     this.invalidateSort();
     this.notifyChange();
     this.scheduleSave();
@@ -151,6 +192,7 @@ export class StateManager {
    * (updatedAt advanced), not when the time window simply expires.
    */
   private mergeWithExisting(conv: Conversation) {
+    this.applyStar(conv);
     const existing = this._conversations.get(conv.id);
     if (!existing) return;
 
