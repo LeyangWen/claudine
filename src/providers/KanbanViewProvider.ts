@@ -45,9 +45,6 @@ export class KanbanViewProvider implements vscode.WebviewViewProvider {
     this._tabManager.onFocusChanged = (conversationId) => {
       this.sendMessage({ type: 'focusedConversation', conversationId });
     };
-    this._tabManager.onOpenConversation = (id) => {
-      this.openConversation(id);
-    };
 
     this._stateManager.onConversationsChanged((conversations) => {
       this.sendDiff(conversations);
@@ -272,8 +269,14 @@ export class KanbanViewProvider implements vscode.WebviewViewProvider {
       this._tabManager.removeMapping(conversationId);
     }
 
-    // No known tab — create one via Claude Code extension
-    await this._tabManager.closeUnmappedClaudeTabByTitle(conversation.title);
+    // An unmapped tab may already show this session (restored after a
+    // restart, or renamed since it was mapped). Focus it; never close it.
+    if (await this._tabManager.focusUnmappedTabForConversation(conversationId)) {
+      console.log(`Claudine: Focused existing unmapped tab for conversation ${conversationId}`);
+      return;
+    }
+
+    // No tab yet — create one via Claude Code extension
 
     try {
       await vscode.commands.executeCommand('claude-vscode.editor.open', conversationId);

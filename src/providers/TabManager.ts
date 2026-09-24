@@ -4,9 +4,21 @@ import { FOCUS_DETECTION_DEBOUNCE_MS } from '../constants';
 
 /**
  * Manages the bidirectional mapping between Claude Code editor tabs and
- * Claudine conversation IDs.  Handles tab focus detection, stale tab
- * cleanup, and restored-shell-tab replacement.
+ * Claudine conversation IDs.  Handles tab focus detection and stale tab
+ * cleanup.
+ *
+ * The map is keyed by tab label, lives only in memory, and loses an entry
+ * whenever Claude Code renames a tab to the session title. An unmapped tab
+ * whose label matches exactly one conversation is therefore adopted back into
+ * the map. Claudine never closes a Claude tab on its own: Claude Code restores
+ * its panels with their sessions after a restart, so an unmapped tab is a live
+ * session, not an empty shell.
  */
+/** Claude Code shortens long tab titles and ends them with this character. */
+const ELLIPSIS = '\u2026';
+/** Shortest truncated label that may be matched by prefix. */
+const MIN_TRUNCATED_PREFIX = 8;
+
 export class TabManager {
   // Bidirectional tab ↔ conversation mapping
   private _tabToConversation = new Map<string, string>(); // tab label → conversationId
@@ -15,7 +27,6 @@ export class TabManager {
   // Focus detection debounce & suppression
   private _focusDetectionTimer: ReturnType<typeof setTimeout> | undefined;
   private _suppressFocusUntil = 0;
-  private _replacingStaleTab = false;
 
   private _onFocusChanged: (conversationId: string | null) => void = () => {};
 
@@ -87,6 +98,40 @@ export class TabManager {
     return this._conversationToTab.get(conversationId);
   }
 
+  /**
+   * IDs of conversations whose title matches a tab label: exactly, or by
+   * prefix when Claude Code truncated a long title with an ellipsis. Forked
+   * sessions share their parent's title, so callers must treat more than one
+   * match as ambiguous.
+   */
+  matchTitle(label: string): string[] {
+    const tabLabel = (label || '').toLowerCase().trim();
+    if (!tabLabel) return [];
+    const prefix = tabLabel.endsWith(ELLIPSIS) ? tabLabel.slice(0, -1).trimEnd() : null;
+
+    const ids: string[] = [];
+    for (const conv of this._stateManager.getConversations()) {
+      const title = (conv.title || '').toLowerCase().trim();
+      if (!title) continue;
+      if (title === tabLabel || (prefix && prefix.length >= MIN_TRUNCATED_PREFIX && title.startsWith(prefix))) {
+        ids.push(conv.id);
+      }
+    }
+    return ids;
+  }
+
+  /** Map a tab label to a conversation, replacing either side's old mapping. */
+  adoptTab(label: string, conversationId: string) {
+    const oldLabel = this._conversationToTab.get(conversationId);
+    if (oldLabel && oldLabel !== label) this._tabToConversation.delete(oldLabel);
+    const oldConversation = this._tabToConversation.get(label);
+    if (oldConversation && oldConversation !== conversationId) this._conversationToTab.delete(oldConversation);
+
+    this._tabToConversation.set(label, conversationId);
+    this._conversationToTab.set(conversationId, label);
+    console.log(`Claudine: Adopted tab "${label}" → conversation ${conversationId}`);
+  }
+
   /** Remove a stale tab mapping for a conversation. */
   removeMapping(conversationId: string) {
     const label = this._conversationToTab.get(conversationId);
@@ -99,22 +144,16 @@ export class TabManager {
   // ── Tab operations ──────────────────────────────────────────────────
 
   /**
-   * Close empty and duplicate Claude Code Visual Editor tabs.
+   * Close empty and duplicate Claude Code Visual Editor tabs (user action).
    *
-   * After a workspace restart, VSCode restores Claude editor tabs as empty
-   * shells — their webview content is gone.
-   *
-   * Detection: if `_tabToConversation` has NO entries, we're in a fresh
-   * session and ALL existing Claude tabs are restored shells → close them.
+   * A tab is closed when it duplicates another tab's label, or when it is
+   * unmapped and its label matches no conversation title. An empty map does
+   * NOT mean every tab is an empty shell: the map is in-memory and starts
+   * empty after every restart, while the restored tabs hold live sessions.
    */
   async closeEmptyClaudeTabs(): Promise<number> {
     const tabsToClose: vscode.Tab[] = [];
     const seenLabels = new Set<string>();
-    const hasMappings = this._tabToConversation.size > 0;
-
-    const knownTitles = new Set(
-      this._stateManager.getConversations().map(c => c.title.toLowerCase().trim())
-    );
 
     for (const group of vscode.window.tabGroups.all) {
       for (const tab of group.tabs) {
@@ -128,13 +167,7 @@ export class TabManager {
         seenLabels.add(tab.label);
 
         if (this._tabToConversation.has(tab.label)) continue;
-
-        if (!hasMappings) {
-          tabsToClose.push(tab);
-          continue;
-        }
-
-        if (knownTitles.has(tab.label.toLowerCase().trim())) continue;
+        if (this.matchTitle(tab.label).length > 0) continue;
 
         tabsToClose.push(tab);
       }
@@ -147,22 +180,26 @@ export class TabManager {
     return tabsToClose.length;
   }
 
-  /** Close an unmapped Claude tab whose label matches the given title. */
-  async closeUnmappedClaudeTabByTitle(title: string): Promise<void> {
-    const titleLower = title.toLowerCase().trim();
+  /**
+   * Focus an unmapped Claude tab that already shows this conversation (its
+   * label matches only this conversation's title) and adopt it. Returns false
+   * when there is no such tab, so the caller can open one.
+   */
+  async focusUnmappedTabForConversation(conversationId: string): Promise<boolean> {
     for (const group of vscode.window.tabGroups.all) {
-      for (const tab of group.tabs) {
+      for (let i = 0; i < group.tabs.length; i++) {
+        const tab = group.tabs[i];
         if (!this.isClaudeCodeTab(tab)) continue;
         if (this._tabToConversation.has(tab.label)) continue;
-        if (tab.label.toLowerCase().trim() === titleLower) {
-          try {
-            await vscode.window.tabGroups.close(tab);
-            console.log(`Claudine: Closed stale restored tab "${tab.label}"`);
-          } catch { /* ignore */ }
-          return;
+        const matches = this.matchTitle(tab.label);
+        if (matches.length === 1 && matches[0] === conversationId) {
+          await this.focusTabAtIndex(group, i);
+          this.adoptTab(tab.label, conversationId);
+          return true;
         }
       }
     }
+    return false;
   }
 
   /** Focus a specific Claude Code tab by its label. */
@@ -228,12 +265,15 @@ export class TabManager {
       const isMapped = this._tabToConversation.has(claudeTab.label);
       focusedId = this.matchTabToConversation(claudeTab);
 
-      // Unmapped tab in a fresh session → restored shell. Replace it.
-      if (focusedId && !isMapped && this._tabToConversation.size === 0 && !this._replacingStaleTab) {
-        console.log(`Claudine: Replacing restored shell tab "${claudeTab.label}"`);
-        this._replacingStaleTab = true;
-        this.replaceRestoredTab(claudeTab, focusedId);
-        return;
+      // Unmapped tab (restored after a restart, or renamed by Claude Code):
+      // adopt it when its label identifies exactly one conversation. Never
+      // close it; it is a live session.
+      if (!isMapped) {
+        const matches = this.matchTitle(claudeTab.label);
+        if (matches.length === 1) {
+          focusedId = matches[0];
+          this.adoptTab(claudeTab.label, focusedId);
+        }
       }
 
       console.log(`Claudine: Focused Claude tab "${claudeTab.label}" → conversation ${focusedId}`);
@@ -281,22 +321,6 @@ export class TabManager {
     }
 
     return null;
-  }
-
-  private _onOpenConversation?: (id: string) => void;
-
-  /** Register a callback for when a restored tab needs to open a conversation. */
-  set onOpenConversation(cb: (id: string) => void) {
-    this._onOpenConversation = cb;
-  }
-
-  private async replaceRestoredTab(staleTab: vscode.Tab, conversationId: string) {
-    try {
-      await vscode.window.tabGroups.close(staleTab);
-      console.log(`Claudine: Closed restored shell tab "${staleTab.label}"`);
-    } catch { /* ignore */ }
-    this._onOpenConversation?.(conversationId);
-    this._replacingStaleTab = false;
   }
 
   dispose() {

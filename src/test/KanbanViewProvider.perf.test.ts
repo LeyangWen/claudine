@@ -27,10 +27,9 @@ vi.mock('../providers/TabManager', () => {
       suppressFocus = vi.fn();
       removeMapping = vi.fn();
       closeEmptyClaudeTabs = vi.fn().mockResolvedValue(0);
-      closeUnmappedClaudeTabByTitle = vi.fn();
+      focusUnmappedTabForConversation = vi.fn().mockResolvedValue(false);
       isClaudeCodeTab = vi.fn();
       set onFocusChanged(_cb: unknown) {}
-      set onOpenConversation(_cb: unknown) {}
       constructor() {
         tabManagerInstances.push(this as unknown as Record<string, unknown>);
       }
