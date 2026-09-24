@@ -60,11 +60,28 @@ export class StorageService {
 
   // Workspace storage methods (for project-specific data)
 
+  /**
+   * Board state for a window with no workspace folder. Such a window tracks
+   * every project, so its board is large; keeping it in a file instead of
+   * globalState stops each save from rewriting state shared by all windows.
+   */
+  private get folderlessBoardStatePath(): string {
+    return path.join(this._globalStoragePath, 'boardState.json');
+  }
+
   public async saveBoardState(state: BoardState): Promise<void> {
     const workspaceFolders = this._platform.getWorkspaceFolders();
     if (!workspaceFolders || workspaceFolders.length === 0) {
-      // Fall back to global storage
-      await this.saveGlobalSetting('boardState', state);
+      try {
+        await this._platform.ensureDirectory(this._globalStoragePath);
+      } catch {
+        // Directory might already exist
+      }
+      try {
+        await this._platform.writeFile(this.folderlessBoardStatePath, JSON.stringify(state));
+      } catch (error) {
+        console.error('Claudine: Error saving board state', error);
+      }
       return;
     }
 
@@ -96,7 +113,14 @@ export class StorageService {
       }
     }
 
-    // Fall back to global storage
+    try {
+      const content = await this._platform.readFile(this.folderlessBoardStatePath);
+      return JSON.parse(content.toString());
+    } catch {
+      // File doesn't exist
+    }
+
+    // Older versions kept the folderless board in global state
     return this.getGlobalSetting<BoardState | null>('boardState', null);
   }
 

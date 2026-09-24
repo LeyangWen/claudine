@@ -47,8 +47,9 @@ export const MAX_IMAGE_PROMPT_LENGTH = 1000;
 /** Maximum number of files held in the incremental parse cache (LRU eviction). */
 export const MAX_PARSE_CACHE_ENTRIES = 200;
 
-/** Debounce delay for persisting board state after mutations. */
-export const SAVE_STATE_DEBOUNCE_MS = 200;
+/** Debounce delay for persisting board state after mutations. Every save
+ *  rewrites the whole board, so keep this well above streaming update rates. */
+export const SAVE_STATE_DEBOUNCE_MS = 2000;
 
 /** Coalesce window for onConversationsChanged notifications. */
 export const NOTIFY_COALESCE_MS = 50;
