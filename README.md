@@ -24,6 +24,21 @@
 
 ---
 
+> **About this fork.** Branch `leyang/patches-1.1.0` is upstream Claudine 1.1.0
+> (commit `ce29d89`, the build published to the marketplace as 1.1.0) plus these
+> changes, one commit each:
+>
+> - **Tabs:** unmapped Claude tabs are adopted instead of closed. This fixes the
+>   close-and-reopen loop that stopped Claude from starting after an editor restart.
+> - **Titles:** cards use Claude Code's own session title (`ai-title` / `custom-title`).
+> - **Stars:** a star button on each card and a Starred filter chip, shared by all windows.
+> - **Labels:** Bug / Improvement / Report / Task, and an explicit label at the start of a
+>   title (`Report - …`, `[Bug] …`) wins over the keyword scorer.
+> - **Storage:** a window with no folder open keeps its board in a file, not in shared `globalState`.
+> - **Paths:** dots in workspace paths are encoded the way Claude Code encodes them.
+>
+> Build a VSIX with `npm ci && (cd webview && npm ci) && npx @vscode/vsce package`.
+
 Claudine is a Visual Studio Code extension that gives you a kanban-style overview of all your [Claude Code](https://docs.anthropic.com/en/docs/claude-code) conversations. It reads Claude Code's native JSONL session files, auto-detects status and category, and renders an interactive board directly in the VS Code panel area.
 
 ![Claudine kanban board screenshot](resources/screenshot.png)
