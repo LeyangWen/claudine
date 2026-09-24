@@ -137,7 +137,7 @@ export interface ClaudineSettings {
 // Claude Code data structures (based on actual file format)
 // Each line in a JSONL conversation file is one of these:
 export interface ClaudeCodeJsonlEntry {
-  type: 'user' | 'assistant' | 'file-history-snapshot' | 'queue-operation';
+  type: 'user' | 'assistant' | 'file-history-snapshot' | 'queue-operation' | 'ai-title' | 'custom-title';
   uuid: string;
   timestamp: string; // ISO 8601
   sessionId: string;
@@ -157,6 +157,10 @@ export interface ClaudeCodeJsonlEntry {
   snapshot?: unknown;
   // queue-operation fields
   operation?: string;
+  // session title records: ai-title is generated, custom-title is set by the
+  // user (and is what a forked session carries). Both are appended repeatedly.
+  aiTitle?: string;
+  customTitle?: string;
 }
 
 export interface ClaudeCodeApiMessage {

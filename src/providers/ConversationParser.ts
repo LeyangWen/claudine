@@ -31,6 +31,8 @@ interface ParseCache {
   firstTimestamp: string | undefined;
   lastTimestamp: string | undefined;
   gitBranch: string | undefined;
+  /** Latest session title Claude Code recorded (ai-title or custom-title). */
+  sessionTitle?: string;
 }
 
 export class ConversationParser {
@@ -88,7 +90,7 @@ export class ConversationParser {
         // No new data — promote in LRU and rebuild from cached messages
         this.touchCache(filePath, cached);
         if (cached.messages.length === 0) return null;
-        return await this.buildConversation(filePath, cached.messages, cached.firstTimestamp, cached.lastTimestamp, cached.gitBranch, cached.sidechainSteps);
+        return await this.buildConversation(filePath, cached.messages, cached.firstTimestamp, cached.lastTimestamp, cached.gitBranch, cached.sidechainSteps, cached.sessionTitle);
       }
 
       if (cached && cached.byteOffset < fileSize) {
@@ -122,7 +124,7 @@ export class ConversationParser {
     this.touchCache(filePath, cache);
 
     if (cache.messages.length === 0) return null;
-    return await this.buildConversation(filePath, cache.messages, cache.firstTimestamp, cache.lastTimestamp, cache.gitBranch, cache.sidechainSteps);
+    return await this.buildConversation(filePath, cache.messages, cache.firstTimestamp, cache.lastTimestamp, cache.gitBranch, cache.sidechainSteps, cache.sessionTitle);
   }
 
   private async parseIncremental(filePath: string, cached: ParseCache, fileSize: number): Promise<Conversation | null> {
@@ -141,7 +143,7 @@ export class ConversationParser {
     }
 
     if (cached.messages.length === 0) return null;
-    return await this.buildConversation(filePath, cached.messages, cached.firstTimestamp, cached.lastTimestamp, cached.gitBranch, cached.sidechainSteps);
+    return await this.buildConversation(filePath, cached.messages, cached.firstTimestamp, cached.lastTimestamp, cached.gitBranch, cached.sidechainSteps, cached.sessionTitle);
   }
 
   /** Parse raw JSONL lines and accumulate results into the cache. */
@@ -162,6 +164,15 @@ export class ConversationParser {
 
         if (entry.gitBranch && entry.gitBranch !== 'HEAD') {
           cache.gitBranch = entry.gitBranch;
+        }
+
+        // Use the title Claude Code shows for the session; the last record wins.
+        if (entry.type === 'ai-title' || entry.type === 'custom-title') {
+          const recorded = entry.type === 'ai-title' ? entry.aiTitle : entry.customTitle;
+          if (typeof recorded === 'string' && recorded.trim()) {
+            cache.sessionTitle = recorded.trim();
+          }
+          continue;
         }
 
         if ((entry.type !== 'user' && entry.type !== 'assistant') || !entry.message) {
@@ -337,10 +348,11 @@ export class ConversationParser {
     firstTimestamp: string | undefined,
     lastTimestamp: string | undefined,
     gitBranch: string | undefined,
-    sidechainSteps: SidechainStep[] = []
+    sidechainSteps: SidechainStep[] = [],
+    sessionTitle?: string
   ): Promise<Conversation | null> {
     const id = this.extractSessionId(filePath);
-    const title = this.extractTitle(messages);
+    const title = sessionTitle || this.extractTitle(messages);
     const description = this.extractDescription(messages);
     const lastMessage = this.extractLastMessage(messages);
 

@@ -89,6 +89,27 @@ describe('ConversationParser', () => {
       expect(result!.title).not.toContain('ide_opened_file');
     });
 
+    it('prefers the session title Claude Code recorded, last record wins', async () => {
+      const content = [
+        fixtures.userMessage('please look at the flaky login test', 10),
+        JSON.stringify({ type: 'ai-title', aiTitle: 'Investigate flaky login test', sessionId: 's1' }),
+        fixtures.assistantMessage('Looking now.', 9),
+        JSON.stringify({ type: 'custom-title', customTitle: '  Fix flaky login test  ', sessionId: 's1' }),
+      ].join('\n');
+      const result = await parseContent(content);
+      expect(result!.title).toBe('Fix flaky login test');
+    });
+
+    it('falls back to the first user message when no title record exists', async () => {
+      const content = [
+        JSON.stringify({ type: 'ai-title', aiTitle: '   ', sessionId: 's1' }),
+        fixtures.userMessage('Rename the config loader', 10),
+        fixtures.assistantMessage('Done.', 9),
+      ].join('\n');
+      const result = await parseContent(content);
+      expect(result!.title).toBe('Rename the config loader');
+    });
+
     it('returns "Untitled Conversation" when no user text', async () => {
       const content = [
         fixtures.assistantMessage('Hello!', 10),
