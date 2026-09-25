@@ -572,6 +572,10 @@ export class ClaudeCodeWatcher {
               if (saved.status === 'done' || saved.status === 'cancelled' || saved.status === 'archived') {
                 existing.status = saved.status;
               }
+              // Parked holds only until the transcript gets a new message
+              if (saved.status === 'parked' && existing.updatedAt.getTime() <= new Date(saved.updatedAt).getTime()) {
+                existing.status = saved.status;
+              }
               // Preserve previousStatus for active→inactive transitions
               if (saved.previousStatus) {
                 existing.previousStatus = saved.previousStatus;

@@ -12,7 +12,7 @@ import {
 import { MAX_COMMAND_RESULTS_HISTORY } from '../constants';
 
 const VALID_STATUSES: ConversationStatus[] = [
-  'todo', 'needs-input', 'in-progress', 'in-review', 'done', 'cancelled', 'archived'
+  'todo', 'needs-input', 'in-progress', 'in-review', 'parked', 'done', 'cancelled', 'archived'
 ];
 
 const VALID_CATEGORIES: ConversationCategory[] = [

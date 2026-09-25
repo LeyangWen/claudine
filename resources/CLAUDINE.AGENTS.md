@@ -18,7 +18,7 @@ for c in data.get('conversations', []):
 
 Each task has: `id`, `title`, `description`, `status`, `category`.
 
-Valid statuses: `todo`, `needs-input`, `in-progress`, `in-review`, `done`, `cancelled`
+Valid statuses: `todo`, `needs-input`, `in-progress`, `in-review`, `parked`, `done`, `cancelled`
 
 Valid categories: `user-story`, `bug`, `feature`, `improvement`, `task`
 

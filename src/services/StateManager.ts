@@ -192,7 +192,7 @@ export class StateManager {
    * Merge an incoming (parsed) conversation with the existing one.
    *
    * Handles two key scenarios:
-   * 1. Manual status overrides (done/cancelled/archived) are preserved until
+   * 1. Manual status overrides (done/cancelled/archived/parked) are preserved until
    *    new activity is detected (updatedAt advances).
    * 2. Agent active→inactive transitions: when an agent was working (isActive)
    *    and becomes idle, the status is updated based on the conversation state
@@ -215,10 +215,12 @@ export class StateManager {
 
     const hasNewContent = conv.updatedAt.getTime() > existing.updatedAt.getTime();
 
-    // Preserve manual done/cancelled/archived while no new messages arrive.
+    // Preserve manual done/cancelled/archived/parked while no new messages arrive.
     // Also preserve updatedAt so the archive timer counts from when the status
     // was set (e.g. via moveConversation), not from the JSONL file's last activity.
-    if (existing.status === 'done' || existing.status === 'cancelled' || existing.status === 'archived') {
+    // Unlike done, a parked card that gets a new message rejoins the normal
+    // cycle: it finishes in in-review, not back in parked.
+    if (existing.status === 'done' || existing.status === 'cancelled' || existing.status === 'archived' || existing.status === 'parked') {
       if (!hasNewContent) {
         conv.status = existing.status;
         conv.previousStatus = existing.previousStatus;

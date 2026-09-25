@@ -75,7 +75,7 @@
   // but NOT written back to the store during drag (avoids store.set()
   // triggering re-renders of all dndzone actions mid-drag).
   let boardItems: Record<ConversationStatus, Conversation[]> = {
-    'todo': [], 'needs-input': [], 'in-progress': [], 'in-review': [], 'done': [], 'cancelled': [], 'archived': []
+    'todo': [], 'needs-input': [], 'in-progress': [], 'in-review': [], 'parked': [], 'done': [], 'cancelled': [], 'archived': []
   };
 
   // Reactive sync: merge extension conversations + drafts into board items.

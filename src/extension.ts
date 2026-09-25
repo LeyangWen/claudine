@@ -92,6 +92,7 @@ export async function activate(context: vscode.ExtensionContext) {
         'needs-input': '$(bell)',
         'in-progress': '$(sync~spin)',
         'in-review': '$(eye)',
+        'parked': '$(inbox)',
         'done': '$(check)',
         'cancelled': '$(circle-slash)',
         'archived': '$(archive)'
@@ -180,6 +181,7 @@ export async function activate(context: vscode.ExtensionContext) {
         { label: `$(bell) ${vscode.l10n.t('Needs Input')}`, status: 'needs-input' },
         { label: `$(sync~spin) ${vscode.l10n.t('In Progress')}`, status: 'in-progress' },
         { label: `$(eye) ${vscode.l10n.t('In Review')}`, status: 'in-review' },
+        { label: `$(inbox) ${vscode.l10n.t('Parked')}`, status: 'parked' },
         { label: `$(check) ${vscode.l10n.t('Done')}`, status: 'done' },
         { label: `$(circle-slash) ${vscode.l10n.t('Cancelled')}`, status: 'cancelled' },
         { label: `$(archive) ${vscode.l10n.t('Archived')}`, status: 'archived' }

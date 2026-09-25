@@ -3,7 +3,7 @@ export type ConversationCategory = 'bug' | 'improvement' | 'report' | 'task';
 /** A card's star. The star button cycles none -> starred -> paused -> none. */
 export type StarMark = 'starred' | 'paused';
 
-export type ConversationStatus = 'todo' | 'needs-input' | 'in-progress' | 'in-review' | 'done' | 'cancelled' | 'archived';
+export type ConversationStatus = 'todo' | 'needs-input' | 'in-progress' | 'in-review' | 'parked' | 'done' | 'cancelled' | 'archived';
 
 export interface Agent {
   id: string;

@@ -252,6 +252,7 @@ function groupByStatus(convs: Conversation[]): Record<ConversationStatus, Conver
     'needs-input': [],
     'in-progress': [],
     'in-review': [],
+    'parked': [],
     'done': [],
     'cancelled': [],
     'archived': []
@@ -324,6 +325,7 @@ export const columns = derived(t, ($t) => [
   { id: 'needs-input' as ConversationStatus, title: $t('column.needsInput', 'Needs Input'), color: '#f59e0b' },
   { id: 'in-progress' as ConversationStatus, title: $t('column.inProgress', 'In Progress'), color: '#3b82f6' },
   { id: 'in-review' as ConversationStatus, title: $t('column.inReview', 'In Review'), color: '#8b5cf6' },
+  { id: 'parked' as ConversationStatus, title: $t('column.parked', 'Parked'), color: '#14b8a6' },
   { id: 'done' as ConversationStatus, title: $t('column.done', 'Done'), color: '#10b981' },
 ]);
 

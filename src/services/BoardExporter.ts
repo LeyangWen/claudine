@@ -70,6 +70,7 @@ export function exportToTrelloJson(conversations: Conversation[], boardName: str
     { id: 'needs-input', name: 'Needs Input' },
     { id: 'in-progress', name: 'In Progress' },
     { id: 'in-review', name: 'In Review' },
+    { id: 'parked', name: 'Parked' },
     { id: 'done', name: 'Done' },
     { id: 'cancelled', name: 'Cancelled' },
     { id: 'archived', name: 'Archived' },

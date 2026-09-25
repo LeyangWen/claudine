@@ -504,6 +504,7 @@ export class KanbanViewProvider implements vscode.WebviewViewProvider {
         'column.needsInput': t('Needs Input'),
         'column.inProgress': t('In Progress'),
         'column.inReview': t('In Review'),
+        'column.parked': t('Parked'),
         'column.done': t('Done'),
         'column.cancelled': t('Cancelled'),
         'column.archived': t('Archived'),

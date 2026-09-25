@@ -141,7 +141,7 @@ export type ConversationCategory = 'bug' | 'improvement' | 'report' | 'task';
 export type StarMark = 'starred' | 'paused';
 /** A filter-bar chip: a category, or a star mark (ANDed with any categories). */
 export type CategoryFilter = ConversationCategory | StarMark;
-export type ConversationStatus = 'todo' | 'needs-input' | 'in-progress' | 'in-review' | 'done' | 'cancelled' | 'archived';
+export type ConversationStatus = 'todo' | 'needs-input' | 'in-progress' | 'in-review' | 'parked' | 'done' | 'cancelled' | 'archived';
 
 export interface Agent {
   id: string;

@@ -316,6 +316,39 @@ describe('StateManager', () => {
       expect(stateManager.getConversation('conv-1')!.status).toBe('done');
     });
 
+    it('keeps a card parked while no new message arrives, even inside the activity window', () => {
+      const active = [{ id: 'claude-main', name: 'Claude', avatar: '', isActive: true }];
+      stateManager.setConversations([makeConversation({ status: 'in-review', agents: active })]);
+      stateManager.moveConversation('conv-1', 'parked');
+
+      // Re-scan of the same transcript: the parser still sees recent activity
+      stateManager.setConversations([makeConversation({ status: 'in-review', agents: active })]);
+      expect(stateManager.getConversation('conv-1')!.status).toBe('parked');
+    });
+
+    it('sends a parked card back through in-progress to in-review when a message arrives', () => {
+      const now = Date.now();
+      stateManager.setConversations([makeConversation({ status: 'in-review', updatedAt: new Date(now - 60 * 60 * 1000) })]);
+      stateManager.moveConversation('conv-1', 'parked');
+
+      const working = makeConversation({
+        status: 'in-progress',
+        updatedAt: new Date(now + 60 * 1000),
+        agents: [{ id: 'claude-main', name: 'Claude', avatar: '', isActive: true }],
+      });
+      stateManager.setConversations([working]);
+      expect(stateManager.getConversation('conv-1')!.status).toBe('in-progress');
+      expect(stateManager.getConversation('conv-1')!.previousStatus).toBe('parked');
+
+      const finished = makeConversation({
+        status: 'in-progress',
+        updatedAt: new Date(now + 2 * 60 * 1000),
+        agents: [{ id: 'claude-main', name: 'Claude', avatar: '', isActive: false }],
+      });
+      stateManager.setConversations([finished]);
+      expect(stateManager.getConversation('conv-1')!.status).toBe('in-review');
+    });
+
     it('removes conversations that no longer have JSONL files', () => {
       stateManager.setConversations([
         makeConversation({ id: 'a' }),
@@ -368,6 +401,16 @@ describe('StateManager', () => {
       ]);
       stateManager.archiveStaleConversations();
       expect(stateManager.getConversation('recent')!.status).toBe('done');
+    });
+
+    it('never archives parked conversations', () => {
+      const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+      stateManager.setConversations([
+        makeConversation({ id: 'parked', status: 'parked', updatedAt: twoDaysAgo }),
+      ]);
+      stateManager.archiveStaleConversations();
+      stateManager.archiveAllDone();
+      expect(stateManager.getConversation('parked')!.status).toBe('parked');
     });
   });
 
