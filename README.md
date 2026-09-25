@@ -36,6 +36,8 @@
 > - **Parked column:** between In Review and Done, for sessions set aside for later (managers,
 >   trackers). A card stays parked until its session gets a new message, then rejoins the
 >   normal cycle and finishes in In Review. Parked cards are never auto-archived.
+> - **Equal columns:** every column shares one width (Done stays narrow). Dragging a handle
+>   resizes them all together; double-click resets.
 > - **Labels:** Bug / Improvement / Report / Task, and an explicit label at the start of a
 >   title (`Report - …`, `[Bug] …`) wins over the keyword scorer.
 > - **Storage:** a window with no folder open keeps its board in a file, not in shared `globalState`.
