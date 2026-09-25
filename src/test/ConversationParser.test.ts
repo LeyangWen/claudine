@@ -439,4 +439,147 @@ describe('ConversationParser', () => {
       expect(result!.sidechainSteps).toBeUndefined();
     });
   });
+
+  describe('BUG6 — cards bounce between In Review and In Progress', () => {
+    it('stays in-progress when the turn ends while a background command runs (BUG6)', async () => {
+      const result = await parseContent(fixtures.backgroundBashPendingConversation);
+      expect(result!.status).toBe('in-progress');
+      expect(result!.backgroundTasks).toBe(1);
+    });
+
+    it('stays in-progress while a background agent runs, even if the text says "completed" (BUG6)', async () => {
+      const result = await parseContent(fixtures.backgroundAgentPendingConversation);
+      expect(result!.status).toBe('in-progress');
+      expect(result!.backgroundTasks).toBe(1);
+    });
+
+    it('goes to in-review once the task notification arrives and the turn ends (BUG6)', async () => {
+      const content = [
+        fixtures.backgroundBashPendingConversation,
+        fixtures.taskNotification('b1abc', 'completed', 5),
+        fixtures.assistantTurn('Benchmark finished: 41/41 pass.', 4, 'end_turn'),
+      ].join('\n');
+      const result = await parseContent(content);
+      expect(result!.status).toBe('in-review');
+      expect(result!.backgroundTasks).toBe(0);
+    });
+
+    it('counts a notification queued mid-turn as finished (BUG6)', async () => {
+      for (const as of ['queue', 'attachment'] as const) {
+        parser = new ConversationParser();
+        const content = [
+          fixtures.userMessage('Run it and keep working', 20),
+          fixtures.assistantMessage('', 19, [{ name: 'Bash' }]),
+          fixtures.toolResult('Command running in background with ID: b2def.', 19, { backgroundTaskId: 'b2def' }),
+          fixtures.taskNotification('b2def', 'failed', 10, as),
+          fixtures.assistantTurn('The run failed; see above.', 9, 'end_turn'),
+        ].join('\n');
+        const result = await parseContent(content);
+        expect(result!.status, as).toBe('in-review');
+        expect(result!.backgroundTasks, as).toBe(0);
+      }
+    });
+
+    it('keeps waiting through Monitor events that carry no status (BUG6)', async () => {
+      const content = [
+        fixtures.userMessage('Watch the deploy', 20),
+        fixtures.assistantMessage('', 19, [{ name: 'Monitor' }]),
+        fixtures.toolResult('Monitor started.', 19, { taskId: 'bmon1', timeoutMs: 900000, persistent: false }),
+        fixtures.assistantTurn('Watching the deploy.', 18, 'end_turn'),
+        fixtures.taskNotification('bmon1', undefined, 10),
+        fixtures.assistantTurn('Still deploying.', 9, 'end_turn'),
+      ].join('\n');
+      const result = await parseContent(content);
+      expect(result!.status).toBe('in-progress');
+    });
+
+    it('treats a stopped task as finished (BUG6)', async () => {
+      const content = [
+        fixtures.backgroundBashPendingConversation,
+        fixtures.userMessage('Stop it', 10),
+        fixtures.assistantMessage('', 9, [{ name: 'TaskStop' }]),
+        fixtures.toolResult('Successfully stopped task: b1abc', 9, { message: 'Successfully stopped task: b1abc', task_id: 'b1abc', task_type: 'local_bash' }),
+        fixtures.assistantTurn('Stopped.', 8, 'end_turn'),
+      ].join('\n');
+      const result = await parseContent(content);
+      expect(result!.status).toBe('in-review');
+    });
+
+    it('stops waiting after an hour with no transcript writes (BUG6)', async () => {
+      const content = [
+        fixtures.userMessage('Run the full benchmark', 200),
+        fixtures.assistantMessage('', 199, [{ name: 'Bash' }]),
+        fixtures.toolResult('Command running in background with ID: b3old.', 199, { backgroundTaskId: 'b3old' }),
+        fixtures.assistantTurn("It's running.", 198, 'end_turn'),
+      ].join('\n');
+      const result = await parseContent(content);
+      expect(result!.status).toBe('in-review');
+      expect(result!.backgroundTasks).toBe(0);
+    });
+
+    it('still asks for input when a question ends the turn with work pending (BUG6)', async () => {
+      const content = [
+        fixtures.backgroundBashPendingConversation,
+        fixtures.assistantMessage('', 17, [{ name: 'AskUserQuestion', input: { question: 'Which sheet?' } }]),
+      ].join('\n');
+      const result = await parseContent(content);
+      expect(result!.status).toBe('needs-input');
+    });
+
+    it('does not keep a new prompt in review because the last answer said "completed" (BUG6b)', async () => {
+      const content = [
+        fixtures.userMessage('Fix the parser', 20),
+        fixtures.assistantTurn('All done — the fix is completed and tests pass successfully.', 18, 'end_turn'),
+        fixtures.userMessage('Now add a test for the empty file case', 1),
+      ].join('\n');
+      const result = await parseContent(content);
+      expect(result!.status).toBe('in-progress');
+    });
+
+    it('treats text written before its tool call as in-progress (BUG6b)', async () => {
+      const content = [
+        fixtures.userMessage('Fix the parser', 20),
+        fixtures.assistantTurn('The first part completed successfully; now running the tests.', 1, 'tool_use'),
+      ].join('\n');
+      const result = await parseContent(content);
+      expect(result!.status).toBe('in-progress');
+    });
+
+    it('ignores a local slash command run after the turn ended (BUG6c)', async () => {
+      const content = [
+        fixtures.completedConversation,
+        fixtures.localCommand('model', 'Set model to `claude-opus-5-5`', 5),
+      ].join('\n');
+      const result = await parseContent(content);
+      expect(result!.status).toBe('in-review');
+    });
+
+    it('ignores a local command whose output has not landed yet (BUG6c)', async () => {
+      const [caveat, invocation] = fixtures.localCommand('model', 'Set model to `claude-opus-5-5`', 5).split('\n');
+      for (const tail of [[caveat], [caveat, invocation]]) {
+        parser = new ConversationParser();
+        const result = await parseContent([fixtures.completedConversation, ...tail].join('\n'));
+        expect(result!.status).toBe('in-review');
+      }
+    });
+
+    it('ignores two local commands in a row (BUG6c)', async () => {
+      const content = [
+        fixtures.completedConversation,
+        fixtures.localCommand('model', 'Set model to `claude-opus-5-5`', 5),
+        fixtures.localCommand('usage', 'Usage: 12%', 4),
+      ].join('\n');
+      const result = await parseContent(content);
+      expect(result!.status).toBe('in-review');
+    });
+
+    it('still shows a prompt-style slash command as in-progress (BUG6c)', async () => {
+      const content = [
+        fixtures.completedConversation,
+        fixtures.userMessage('<command-message>code-review</command-message>\n<command-name>/code-review</command-name>', 1),
+      ].join('\n');
+      const result = await parseContent(content);
+      expect(result!.status).toBe('in-progress');
+    });
+  });
 });

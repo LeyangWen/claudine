@@ -1,7 +1,7 @@
 import { IPlatformAdapter, PlatformEvent, PlatformEventEmitter } from '../platform/IPlatformAdapter';
 import { StorageService, StarredEntry } from './StorageService';
 import { Conversation, ConversationStatus, StarMark } from '../types';
-import { SAVE_STATE_DEBOUNCE_MS, NOTIFY_COALESCE_MS } from '../constants';
+import { SAVE_STATE_DEBOUNCE_MS, NOTIFY_COALESCE_MS, BACKGROUND_TASK_SILENCE_MS } from '../constants';
 
 export class StateManager {
   private _conversations: Map<string, Conversation> = new Map();
@@ -243,7 +243,8 @@ export class StateManager {
     // Detect active → inactive transition (agent finished working).
     // Only trigger when the JSONL file has new content — a stale re-parse
     // where isRecentlyActive() naturally expires must NOT cause a transition.
-    if (wasActive && !isNowActive && hasNewContent) {
+    // BUG6: nor is it finished while its background tasks still run.
+    if (wasActive && !isNowActive && hasNewContent && !conv.backgroundTasks) {
       const prev = conv.previousStatus;
 
       if (conv.hasError) {
@@ -366,6 +367,17 @@ export class StateManager {
         (now - conv.updatedAt.getTime()) >= StateManager.ARCHIVE_THRESHOLD_MS
       ) {
         conv.status = 'archived';
+        changed = true;
+      }
+      // BUG6: a card held in progress for background tasks falls back to
+      // in-review once its transcript has been silent too long. The parser
+      // applies the same cutoff, but only when the file is read again.
+      if (
+        conv.status === 'in-progress' && conv.backgroundTasks &&
+        (now - conv.updatedAt.getTime()) >= BACKGROUND_TASK_SILENCE_MS
+      ) {
+        conv.status = 'in-review';
+        conv.backgroundTasks = 0;
         changed = true;
       }
     }

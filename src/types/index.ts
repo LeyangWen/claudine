@@ -42,6 +42,8 @@ export interface Conversation {
   icon?: string;
   sidechainSteps?: SidechainStep[];
   referencedImage?: string;
+  /** Background tasks (Bash, async agents, Monitor) launched and not yet reported finished. */
+  backgroundTasks?: number;
   originalTitle?: string;
   originalDescription?: string;
   /** Starred or paused by the user. Persisted in starred.json, shared by all windows. */
@@ -143,7 +145,7 @@ export interface ClaudineSettings {
 // Claude Code data structures (based on actual file format)
 // Each line in a JSONL conversation file is one of these:
 export interface ClaudeCodeJsonlEntry {
-  type: 'user' | 'assistant' | 'file-history-snapshot' | 'queue-operation' | 'ai-title' | 'custom-title';
+  type: 'user' | 'assistant' | 'file-history-snapshot' | 'queue-operation' | 'attachment' | 'ai-title' | 'custom-title';
   uuid: string;
   timestamp: string; // ISO 8601
   sessionId: string;
@@ -157,12 +159,28 @@ export interface ClaudeCodeJsonlEntry {
   requestId?: string;
   permissionMode?: string;
   message?: ClaudeCodeApiMessage;
-  // tool execution result (entry-level, separate from message.content)
-  toolUseResult?: { interrupted?: boolean; stdout?: string; stderr?: string };
+  // tool execution result (entry-level, separate from message.content).
+  // Background launches carry an id: backgroundTaskId (Bash), agentId with
+  // status 'async_launched' (Agent), taskId + timeoutMs (Monitor); TaskStop
+  // echoes the task_id it stopped.
+  toolUseResult?: {
+    interrupted?: boolean;
+    stdout?: string;
+    stderr?: string;
+    backgroundTaskId?: string;
+    status?: string;
+    agentId?: string;
+    taskId?: string;
+    timeoutMs?: number;
+    task_id?: string;
+  };
   // file-history-snapshot fields
   snapshot?: unknown;
-  // queue-operation fields
+  // queue-operation fields (content holds the queued prompt, e.g. a task-notification)
   operation?: string;
+  content?: string;
+  // attachment fields (a queued_command attachment carries the same prompt)
+  attachment?: { type?: string; prompt?: string };
   // session title records: ai-title is generated, custom-title is set by the
   // user (and is what a forked session carries). Both are appended repeatedly.
   aiTitle?: string;
@@ -171,7 +189,8 @@ export interface ClaudeCodeJsonlEntry {
 
 export interface ClaudeCodeApiMessage {
   role: 'user' | 'assistant';
-  content: ClaudeCodeContent[];
+  /** Blocks, or a plain string (slash commands, task notifications). */
+  content: ClaudeCodeContent[] | string;
   model?: string;
   id?: string;
   type?: string;
@@ -205,6 +224,10 @@ export interface ParsedMessage {
   rateLimitResetDisplay?: string;
   /** Absolute ISO datetime when the rate limit lifts. */
   rateLimitResetTime?: string;
+  /** API stop_reason of an assistant record ('end_turn', 'tool_use', ...). */
+  stopReason?: string;
+  /** Part of a local slash command (e.g. /model), which never starts a turn. */
+  localCommand?: 'caveat' | 'invocation' | 'output';
 }
 
 export interface ClaudeCodeSession {

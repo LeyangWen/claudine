@@ -18,6 +18,24 @@ export const FOCUS_DETECTION_DEBOUNCE_MS = 150;
 /** Time window within which a conversation is considered "recently active". */
 export const RECENTLY_ACTIVE_WINDOW_MS = 2 * 60 * 1000; // 2 minutes
 
+/**
+ * How long a session whose turn ended with background tasks still running
+ * (background Bash, async agents, Monitor) stays in progress without any
+ * transcript write. After that the task is assumed lost (Claude Code exited
+ * before it could notify) and the card falls back to in-review. 95% of real
+ * waits see under 12 minutes of silence; 3 of 228 exceeded an hour.
+ */
+export const BACKGROUND_TASK_SILENCE_MS = 60 * 60 * 1000; // 1 hour
+
+/**
+ * How long a card that just finished its turn waits before it moves from
+ * in-progress to in-review. Claude Code delivers queued work (a task
+ * notification that arrived mid-turn, a prompt typed while it was busy) within
+ * about 1.5 s of the turn ending; without the wait the card jumps to review
+ * and straight back. Human replies take far longer (none seen under 10 s).
+ */
+export const REVIEW_SETTLE_MS = 3000;
+
 /** Timeout for Claude CLI summarization calls. */
 export const CLI_TIMEOUT_MS = 60_000; // 60 seconds
 

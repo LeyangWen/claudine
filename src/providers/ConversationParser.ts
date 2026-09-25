@@ -16,6 +16,7 @@ import {
   MAX_LAST_MESSAGE_LENGTH,
   MAX_MARKUP_STRIP_LENGTH,
   RECENTLY_ACTIVE_WINDOW_MS,
+  BACKGROUND_TASK_SILENCE_MS,
   MAX_PARSE_CACHE_ENTRIES,
   RATE_LIMIT_PATTERN
 } from '../constants';
@@ -33,6 +34,8 @@ interface ParseCache {
   gitBranch: string | undefined;
   /** Latest session title Claude Code recorded (ai-title or custom-title). */
   sessionTitle?: string;
+  /** BUG6: background tasks launched but not yet reported finished. */
+  backgroundTasks: Set<string>;
 }
 
 export class ConversationParser {
@@ -90,7 +93,7 @@ export class ConversationParser {
         // No new data — promote in LRU and rebuild from cached messages
         this.touchCache(filePath, cached);
         if (cached.messages.length === 0) return null;
-        return await this.buildConversation(filePath, cached.messages, cached.firstTimestamp, cached.lastTimestamp, cached.gitBranch, cached.sidechainSteps, cached.sessionTitle);
+        return await this.buildConversation(filePath, cached.messages, cached.firstTimestamp, cached.lastTimestamp, cached.gitBranch, cached.sidechainSteps, cached.sessionTitle, this.pendingBackgroundTasks(cached));
       }
 
       if (cached && cached.byteOffset < fileSize) {
@@ -118,13 +121,14 @@ export class ConversationParser {
       firstTimestamp: undefined,
       lastTimestamp: undefined,
       gitBranch: undefined,
+      backgroundTasks: new Set(),
     };
 
     this.parseLines(content, cache);
     this.touchCache(filePath, cache);
 
     if (cache.messages.length === 0) return null;
-    return await this.buildConversation(filePath, cache.messages, cache.firstTimestamp, cache.lastTimestamp, cache.gitBranch, cache.sidechainSteps, cache.sessionTitle);
+    return await this.buildConversation(filePath, cache.messages, cache.firstTimestamp, cache.lastTimestamp, cache.gitBranch, cache.sidechainSteps, cache.sessionTitle, this.pendingBackgroundTasks(cache));
   }
 
   private async parseIncremental(filePath: string, cached: ParseCache, fileSize: number): Promise<Conversation | null> {
@@ -143,7 +147,7 @@ export class ConversationParser {
     }
 
     if (cached.messages.length === 0) return null;
-    return await this.buildConversation(filePath, cached.messages, cached.firstTimestamp, cached.lastTimestamp, cached.gitBranch, cached.sidechainSteps, cached.sessionTitle);
+    return await this.buildConversation(filePath, cached.messages, cached.firstTimestamp, cached.lastTimestamp, cached.gitBranch, cached.sidechainSteps, cached.sessionTitle, this.pendingBackgroundTasks(cached));
   }
 
   /** Parse raw JSONL lines and accumulate results into the cache. */
@@ -175,6 +179,8 @@ export class ConversationParser {
           continue;
         }
 
+        this.trackBackgroundTasks(entry, cache);
+
         if ((entry.type !== 'user' && entry.type !== 'assistant') || !entry.message) {
           continue;
         }
@@ -196,11 +202,61 @@ export class ConversationParser {
     }
   }
 
+  /**
+   * BUG6: keep the set of background tasks this session launched and has not
+   * heard back from. A launch is a tool result whose toolUseResult carries the
+   * task's id; the end is a <task-notification> with a <status> for that id.
+   * Claude Code writes the notification as a user record when it wakes an idle
+   * session, but as queue-operation + attachment records when it arrives
+   * mid-turn, so all three are read. Monitor events carry no <status> and do
+   * not end the task. TaskStop echoes the id it stopped.
+   */
+  private trackBackgroundTasks(entry: ClaudeCodeJsonlEntry, cache: ParseCache) {
+    if (entry.isSidechain) return;
+
+    const result = entry.type === 'user' ? entry.toolUseResult : undefined;
+    if (result && typeof result === 'object') {
+      const launched = result.backgroundTaskId
+        ?? (result.status === 'async_launched' ? result.agentId : undefined)
+        ?? (result.timeoutMs !== undefined ? result.taskId : undefined);
+      if (typeof launched === 'string') cache.backgroundTasks.add(launched);
+      if (typeof result.task_id === 'string') cache.backgroundTasks.delete(result.task_id);
+    }
+    if (cache.backgroundTasks.size === 0) return;
+
+    let text: string | undefined;
+    if (entry.type === 'queue-operation') {
+      text = entry.content;
+    } else if (entry.type === 'attachment') {
+      text = entry.attachment?.prompt;
+    } else if (entry.type === 'user' && entry.message) {
+      const content = entry.message.content;
+      text = typeof content === 'string'
+        ? content
+        : (content || []).filter(b => b.type === 'text').map(b => b.text || '').join('\n');
+    }
+    if (typeof text !== 'string' || !text.includes('<task-notification>')) return;
+
+    for (const notification of text.split('<task-notification>').slice(1)) {
+      const id = /<task-id>([^<]+)<\/task-id>/.exec(notification)?.[1];
+      if (id && /<status>[^<]+<\/status>/.test(notification)) {
+        cache.backgroundTasks.delete(id);
+      }
+    }
+  }
+
+  /** BUG6: tasks still pending, or 0 once the transcript has been silent too long. */
+  private pendingBackgroundTasks(cache: ParseCache): number {
+    if (cache.backgroundTasks.size === 0 || !cache.lastTimestamp) return 0;
+    const silence = Date.now() - new Date(cache.lastTimestamp).getTime();
+    return silence < BACKGROUND_TASK_SILENCE_MS ? cache.backgroundTasks.size : 0;
+  }
+
   /** Extract a sidechain activity step from a sidechain JSONL entry. */
   private collectSidechainStep(entry: ClaudeCodeJsonlEntry, cache: ParseCache) {
     if (!entry.message) return;
 
-    const content = entry.message.content || [];
+    const content = Array.isArray(entry.message.content) ? entry.message.content : [];
     const role = entry.message.role;
 
     // Find the first tool_use or tool_result to determine status
@@ -239,7 +295,8 @@ export class ConversationParser {
     const role = entry.message.role;
     if (role !== 'user' && role !== 'assistant') return null;
 
-    const contentBlocks: ClaudeCodeContent[] = entry.message.content || [];
+    const rawContent = entry.message.content;
+    const contentBlocks: ClaudeCodeContent[] = Array.isArray(rawContent) ? rawContent : [];
 
     const textParts: string[] = [];
     const toolUses: Array<{ name: string; input: Record<string, unknown> }> = [];
@@ -313,8 +370,41 @@ export class ConversationParser {
       hasQuestion,
       isRateLimited,
       rateLimitResetDisplay,
-      rateLimitResetTime
+      rateLimitResetTime,
+      stopReason: entry.message.stop_reason ?? undefined,
+      localCommand: role === 'user'
+        ? ConversationParser.localCommandPart(typeof rawContent === 'string' ? rawContent : textContent)
+        : undefined,
     };
+  }
+
+  /** BUG6c: which part of a slash command a user record is, if any. */
+  private static localCommandPart(text: string): ParsedMessage['localCommand'] {
+    const head = text.trimStart();
+    if (head.startsWith('<local-command-caveat>')) return 'caveat';
+    if (head.startsWith('<local-command-stdout>') || head.startsWith('<local-command-stderr>')) return 'output';
+    if (head.startsWith('<command-name>') || head.startsWith('<command-message>')) return 'invocation';
+    return undefined;
+  }
+
+  /**
+   * BUG6c: drop trailing local slash commands (/model, /usage). They write a
+   * caveat, the invocation and its output as user records but never start a
+   * turn. A command counts as local once its caveat or its output is there; a
+   * prompt-style command (a skill) has neither, so it stays.
+   */
+  private withoutTrailingLocalCommands(messages: ParsedMessage[]): ParsedMessage[] {
+    let end = messages.length;
+    for (;;) {
+      let start = end;
+      while (start > 0 && messages[start - 1].localCommand === 'output') start--;
+      const hasOutput = start < end;
+      if (start > 0 && messages[start - 1].localCommand === 'invocation') start--;
+      if (start > 0 && messages[start - 1].localCommand === 'caveat') start--;
+      else if (!hasOutput) break;
+      end = start;
+    }
+    return end === messages.length ? messages : messages.slice(0, end);
   }
 
   /** Keep only the fields we actually use from tool inputs, discarding large payloads. */
@@ -349,7 +439,8 @@ export class ConversationParser {
     lastTimestamp: string | undefined,
     gitBranch: string | undefined,
     sidechainSteps: SidechainStep[] = [],
-    sessionTitle?: string
+    sessionTitle?: string,
+    backgroundTasks = 0
   ): Promise<Conversation | null> {
     const id = this.extractSessionId(filePath);
     const title = sessionTitle || this.extractTitle(messages);
@@ -361,7 +452,10 @@ export class ConversationParser {
       return null;
     }
 
-    const status = this.detectStatus(messages);
+    let status = this.detectStatus(messages);
+    // BUG6: a turn that ends while its background tasks still run is not
+    // finished work; the task-notification will wake the session again.
+    if (status === 'in-review' && backgroundTasks > 0) status = 'in-progress';
     const category = this._classifier.classify(title, description, messages);
     const agents = this.detectAgents(messages);
     const hasError = this.hasRecentError(messages);
@@ -391,6 +485,7 @@ export class ConversationParser {
       rateLimitResetTime: rateLimitInfo.time,
       sidechainSteps: sidechainSteps.length > 0 ? sidechainSteps : undefined,
       referencedImage: this.extractReferencedImage(messages),
+      backgroundTasks,
       createdAt,
       updatedAt,
       filePath,
@@ -439,7 +534,8 @@ export class ConversationParser {
     return lastLine.length > MAX_LAST_MESSAGE_LENGTH ? lastLine.slice(0, MAX_LAST_MESSAGE_LENGTH - 3) + '...' : lastLine;
   }
 
-  private detectStatus(messages: ParsedMessage[]): ConversationStatus {
+  private detectStatus(allMessages: ParsedMessage[]): ConversationStatus {
+    const messages = this.withoutTrailingLocalCommands(allMessages);
     if (messages.length === 0) return 'todo';
 
     const hasAssistant = messages.some(m => m.role === 'assistant');
@@ -469,6 +565,12 @@ export class ConversationParser {
         return 'needs-input';
       }
 
+      // BUG6b: the API says a tool call follows (text or thinking written
+      // ahead of its tool_use), so whatever the text says, the turn goes on.
+      if (lastMessage === lastAssistant && lastAssistant.stopReason === 'tool_use') {
+        return 'in-progress';
+      }
+
       // Check for question / approval patterns (word-bounded to avoid partial
       // matches like "should implement" triggering "should i")
       if (
@@ -481,8 +583,10 @@ export class ConversationParser {
         }
       }
 
-      // Check for completion
+      // Check for completion. BUG6b: only when the conversation ended on this
+      // message; a prompt sent after a "completed" answer is new work.
       if (
+        lastAssistant === lastMessage &&
         /\b(all (done|set|changes)|completed?|finished|i've (made|completed|finished|implemented)|successfully|here's a summary)\b/i.test(content)
       ) {
         return 'in-review';

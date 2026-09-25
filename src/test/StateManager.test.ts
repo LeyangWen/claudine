@@ -285,6 +285,24 @@ describe('StateManager', () => {
       expect(stateManager.getConversation('conv-1')!.status).toBe('in-review');
     });
 
+    it('keeps a card in progress when the agent goes idle with background tasks pending (BUG6)', () => {
+      // Recent timestamps: an hour of silence would end the wait on its own
+      const now = Date.now();
+      stateManager.setConversations([makeConversation({
+        status: 'in-progress',
+        updatedAt: new Date(now - 10 * 60 * 1000),
+        agents: [{ id: 'claude-main', name: 'Claude', avatar: '', isActive: true }],
+      })]);
+
+      stateManager.setConversations([makeConversation({
+        status: 'in-progress',
+        backgroundTasks: 1,
+        updatedAt: new Date(now - 5 * 60 * 1000),
+        agents: [{ id: 'claude-main', name: 'Claude', avatar: '', isActive: false }],
+      })]);
+      expect(stateManager.getConversation('conv-1')!.status).toBe('in-progress');
+    });
+
     it('restores done status when agent re-runs and finishes', () => {
       // Use recent timestamps to avoid the 4-hour auto-archival threshold
       const now = Date.now();
@@ -401,6 +419,20 @@ describe('StateManager', () => {
       ]);
       stateManager.archiveStaleConversations();
       expect(stateManager.getConversation('recent')!.status).toBe('done');
+    });
+
+    it('moves a card waiting on background tasks to in-review after an hour of silence (BUG6)', () => {
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+      const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+      stateManager.setConversations([
+        makeConversation({ id: 'lost', status: 'in-progress', backgroundTasks: 1, updatedAt: twoHoursAgo }),
+        makeConversation({ id: 'waiting', status: 'in-progress', backgroundTasks: 1, updatedAt: tenMinutesAgo }),
+        makeConversation({ id: 'long-tool', status: 'in-progress', updatedAt: twoHoursAgo }),
+      ]);
+      stateManager.archiveStaleConversations();
+      expect(stateManager.getConversation('lost')!.status).toBe('in-review');
+      expect(stateManager.getConversation('waiting')!.status).toBe('in-progress');
+      expect(stateManager.getConversation('long-tool')!.status).toBe('in-progress');
     });
 
     it('never archives parked conversations', () => {

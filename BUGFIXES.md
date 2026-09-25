@@ -60,3 +60,21 @@
 - **Symptom:** Conversations where the assistant says things like "I should implement this using CSS variables" are detected as "needs input" because "should implement" contains the substring "should i".
 - **Root cause:** The question-detection regex `/should i/i` lacked word boundaries, matching partial words. Additionally, the regex was checked against ANY last assistant message — even one from earlier in the conversation that the user already responded to.
 - [✔️] Fixed — added word boundaries to regex patterns; question pattern only triggers needs-input when it's the very last message (user hasn't responded yet)
+
+## BUG6 — Card jumps to In Review and back while work is still running
+- **Reported:** 2026-09-25
+- **Symptom:** A card moves to In Review and then back to In Progress although the session has not finished.
+- **Root cause:** `detectStatus()` only looks at the last message. A turn that ends while background tasks run (background Bash, async agents, Monitor) looks finished, and the task-notification then wakes the session again. Replaying 48 recent transcripts, 45 of 210 bounces came from this. A notification that arrives mid-turn is written as `queue-operation` + `attachment` records, not a user message, and Claude Code delivers queued work up to ~1.5 s after the turn ends.
+- [✔️] Fixed: the parser tracks launched task ids (`toolUseResult.backgroundTaskId`, `status: 'async_launched'` + `agentId`, Monitor `taskId`) until a `<task-notification>` with a `<status>` or a TaskStop result names them. It keeps the card in progress for up to 1 h of transcript silence. The watcher holds any in-progress → in-review move for 3 s.
+
+## BUG6b — Stale completion wording keeps a new prompt in In Review
+- **Reported:** 2026-09-25
+- **Symptom:** After a new prompt, the card stays in In Review until the first tool call, then jumps to In Progress.
+- **Root cause:** The completion regex ("completed", "successfully", …) was tested against the last assistant message even when a user message followed it. Text written ahead of a tool call (`stop_reason: 'tool_use'`) could also match.
+- [✔️] Fixed: the regex applies only when the conversation ended on that message, and `stop_reason: 'tool_use'` means in progress.
+
+## BUG6c — A local slash command moves a finished card to In Progress
+- **Reported:** 2026-09-25
+- **Symptom:** Running `/model` (or any local command) on a finished session moves its card to In Progress, where it stays.
+- **Root cause:** Local commands write a caveat, the invocation and its output as user records but never start a turn; the parser read the trailing user record as new work.
+- [✔️] Fixed: trailing local-command records (caveat or output present) are ignored for status. Prompt-style commands still count.

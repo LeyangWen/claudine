@@ -7,7 +7,7 @@ import { StateManager } from '../services/StateManager';
 import { SummaryService } from '../services/SummaryService';
 import { ImageGenerator } from '../services/ImageGenerator';
 import { Conversation, ProjectManifestEntry } from '../types';
-import { MAX_IMAGE_FILE_SIZE_BYTES } from '../constants';
+import { MAX_IMAGE_FILE_SIZE_BYTES, REVIEW_SETTLE_MS } from '../constants';
 
 /** Patterns that identify OS temp/system directories to auto-exclude in standalone mode. */
 const EXCLUDED_PATH_PATTERNS = [
@@ -26,6 +26,8 @@ export class ClaudeCodeWatcher {
   private _claudePath: string;
   private _excludedWorkspacePath: string | undefined;
   private _iconPending = new Set<string>();
+  /** BUG6: parsed in-review updates held back for REVIEW_SETTLE_MS, by file. */
+  private _pendingReview = new Map<string, { conversation: Conversation; timer: ReturnType<typeof setTimeout> }>();
 
   /** Clear the pending-icon set so regeneration can pick up all conversations. */
   public clearPendingIcons() {
@@ -102,6 +104,8 @@ export class ClaudeCodeWatcher {
       this._watcherDisposable.dispose();
       this._watcherDisposable = undefined;
     }
+    for (const pending of this._pendingReview.values()) clearTimeout(pending.timer);
+    this._pendingReview.clear();
   }
 
   public async refresh() {
@@ -146,33 +150,74 @@ export class ClaudeCodeWatcher {
     try {
       const conversation = await this._parser.parseFile(filePath);
       if (conversation) {
-        this._summaryService.applyCached(conversation);
-        this._stateManager.updateConversation(conversation);
-
-        // Kick off async summarization if not cached
-        if (!this._summaryService.hasCached(conversation.id)) {
-          this._summaryService.summarizeUncached([conversation], (id, summary) => {
-            const existing = this._stateManager.getConversation(id);
-            if (existing) {
-              this._stateManager.updateConversation({
-                ...existing,
-                originalTitle: existing.originalTitle || existing.title,
-                originalDescription: existing.originalDescription || existing.description,
-                title: summary.title,
-                description: summary.description,
-                lastMessage: summary.lastMessage
-              });
-            }
-          });
-        }
+        this.settleAndApply(filePath, conversation);
       }
     } catch (error) {
       console.error(`Claudine: Error parsing file ${filePath}`, error);
     }
   }
 
+  /**
+   * BUG6: hold an in-progress → in-review move for REVIEW_SETTLE_MS. A write
+   * that arrives meanwhile replaces the held update (or cancels it, when it
+   * shows the session working again); the deadline is not pushed back, so a
+   * session that keeps appending bookkeeping records still reaches review.
+   */
+  private settleAndApply(filePath: string, conversation: Conversation) {
+    const pending = this._pendingReview.get(filePath);
+    const finishing = conversation.status === 'in-review'
+      && this._stateManager.getConversation(conversation.id)?.status === 'in-progress';
+
+    if (finishing) {
+      if (pending) {
+        pending.conversation = conversation;
+      } else {
+        const timer = setTimeout(() => {
+          const held = this._pendingReview.get(filePath);
+          this._pendingReview.delete(filePath);
+          if (held) this.applyConversation(held.conversation);
+        }, REVIEW_SETTLE_MS);
+        this._pendingReview.set(filePath, { conversation, timer });
+      }
+      return;
+    }
+
+    if (pending) {
+      clearTimeout(pending.timer);
+      this._pendingReview.delete(filePath);
+    }
+    this.applyConversation(conversation);
+  }
+
+  private applyConversation(conversation: Conversation) {
+    this._summaryService.applyCached(conversation);
+    this._stateManager.updateConversation(conversation);
+
+    // Kick off async summarization if not cached
+    if (!this._summaryService.hasCached(conversation.id)) {
+      this._summaryService.summarizeUncached([conversation], (id, summary) => {
+        const existing = this._stateManager.getConversation(id);
+        if (existing) {
+          this._stateManager.updateConversation({
+            ...existing,
+            originalTitle: existing.originalTitle || existing.title,
+            originalDescription: existing.originalDescription || existing.description,
+            title: summary.title,
+            description: summary.description,
+            lastMessage: summary.lastMessage
+          });
+        }
+      });
+    }
+  }
+
   private onFileDeleted(filePath: string) {
     this._parser.clearCache(filePath);
+    const pending = this._pendingReview.get(filePath);
+    if (pending) {
+      clearTimeout(pending.timer);
+      this._pendingReview.delete(filePath);
+    }
     const conversationId = path.basename(filePath, '.jsonl');
     if (conversationId) {
       this._stateManager.removeConversation(conversationId);

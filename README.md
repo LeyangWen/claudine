@@ -40,6 +40,10 @@
 >   resizes them all together; double-click resets.
 > - **Labels:** Bug / Improvement / Report / Task, and an explicit label at the start of a
 >   title (`Report - …`, `[Bug] …`) wins over the keyword scorer.
+> - **Status:** a card stays In Progress while the session's background tasks (background
+>   commands, async agents, Monitor) are still running, and waits 3 s before moving to In Review,
+>   so it no longer jumps to In Review and back. `/model` and other local commands no longer move
+>   a finished card.
 > - **Storage:** a window with no folder open keeps its board in a file, not in shared `globalState`.
 > - **Paths:** dots in workspace paths are encoded the way Claude Code encodes them.
 >

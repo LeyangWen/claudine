@@ -5,7 +5,7 @@
  * (async I/O, search indexing, icon separation, batched updates)
  * can be validated without silently breaking functionality.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
 import * as fs from 'fs';
 import * as fsp from 'fs/promises';
@@ -13,6 +13,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { ClaudeCodeWatcher } from '../providers/ClaudeCodeWatcher';
 import { Conversation } from '../types';
+import { REVIEW_SETTLE_MS } from '../constants';
 import type { IPlatformAdapter, PlatformEventEmitter, PlatformEvent, Disposable } from '../platform/IPlatformAdapter';
 
 function createMockPlatform(): IPlatformAdapter {
@@ -265,6 +266,60 @@ describe('ClaudeCodeWatcher — regression tests', () => {
       expect(mockStateManager.setConversations).toHaveBeenCalledTimes(1);
       const conversations = mockStateManager.setConversations.mock.calls[0][0] as Conversation[];
       expect(conversations.length).toBe(2);
+    });
+  });
+
+  describe('BUG6 — settle before in-review', () => {
+    const file = path.join(projectsPath, 'test-project', 'conv-1.jsonl');
+    let parsed: Conversation[];
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      parsed = [];
+      (watcher as any)._parser = { parseFile: vi.fn(async () => parsed.shift() ?? null), clearCache: vi.fn() };
+      (watcher as any)._summaryService = { applyCached: vi.fn(), hasCached: () => true, summarizeUncached: vi.fn() };
+      mockStateManager.getConversation.mockReturnValue(makeConversation({ status: 'in-progress' }));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    const change = () => (watcher as any).onFileChanged(file);
+
+    it('holds a finished turn back for the settle time (BUG6)', async () => {
+      parsed.push(makeConversation({ status: 'in-review' }));
+      await change();
+      expect(mockStateManager.updateConversation).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(REVIEW_SETTLE_MS);
+      expect(mockStateManager.updateConversation).toHaveBeenCalledTimes(1);
+      expect(mockStateManager.updateConversation.mock.calls[0][0].status).toBe('in-review');
+    });
+
+    it('drops the held update when the session starts working again (BUG6)', async () => {
+      parsed.push(makeConversation({ status: 'in-review' }), makeConversation({ status: 'in-progress', lastMessage: 'woke up' }));
+      await change();
+      await change();
+      vi.advanceTimersByTime(REVIEW_SETTLE_MS);
+      expect(mockStateManager.updateConversation).toHaveBeenCalledTimes(1);
+      expect(mockStateManager.updateConversation.mock.calls[0][0].lastMessage).toBe('woke up');
+    });
+
+    it('keeps the first deadline and applies the newest parse (BUG6)', async () => {
+      parsed.push(makeConversation({ status: 'in-review', lastMessage: 'first' }), makeConversation({ status: 'in-review', lastMessage: 'second' }));
+      await change();
+      vi.advanceTimersByTime(REVIEW_SETTLE_MS - 500);
+      await change();
+      vi.advanceTimersByTime(500);
+      expect(mockStateManager.updateConversation).toHaveBeenCalledTimes(1);
+      expect(mockStateManager.updateConversation.mock.calls[0][0].lastMessage).toBe('second');
+    });
+
+    it('applies other moves at once (BUG6)', async () => {
+      mockStateManager.getConversation.mockReturnValue(makeConversation({ status: 'in-review' }));
+      parsed.push(makeConversation({ status: 'in-review' }));
+      await change();
+      expect(mockStateManager.updateConversation).toHaveBeenCalledTimes(1);
     });
   });
 
