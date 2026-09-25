@@ -425,25 +425,27 @@ export function restoreZoom() {
   }
 }
 
-// ── Column Widths ─────────────────────────────────────────────────────
+// ── Column Width ──────────────────────────────────────────────────────
 
-/** Persisted column widths (px). null = auto/default flex layout. */
-export const columnWidths = writable<Record<string, number | null>>({});
+/**
+ * Persisted shared column width (px). Every non-narrow column uses it, so
+ * the columns are always equal. null = auto/default flex layout.
+ */
+export const columnWidth = writable<number | null>(null);
 
-export function setColumnWidth(id: string, width: number | null) {
-  columnWidths.update(w => ({ ...w, [id]: width }));
-  vscode.mergeState({ columnWidths: get(columnWidths) });
+export function setColumnWidth(width: number | null) {
+  columnWidth.set(width);
+  vscode.mergeState({ columnWidth: width });
 }
 
-export function resetAllColumnWidths() {
-  columnWidths.set({});
-  vscode.mergeState({ columnWidths: {} });
+export function resetColumnWidth() {
+  setColumnWidth(null);
 }
 
-export function restoreColumnWidths() {
-  const state = vscode.getState<{ columnWidths?: Record<string, number | null> }>();
-  if (state?.columnWidths) {
-    columnWidths.set(state.columnWidths);
+export function restoreColumnWidth() {
+  const state = vscode.getState<{ columnWidth?: number | null }>();
+  if (typeof state?.columnWidth === 'number') {
+    columnWidth.set(state.columnWidth);
   }
 }
 

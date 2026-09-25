@@ -3,13 +3,14 @@
   import { dndzone, SHADOW_PLACEHOLDER_ITEM_ID } from 'svelte-dnd-action';
   import KanbanColumn from './KanbanColumn.svelte';
   import ColumnResizeHandle from './ColumnResizeHandle.svelte';
+  import { nextColumnWidth, maxColumnWidth as maxColumnWidthFor } from '../lib/columnWidth';
   import TaskCard from './TaskCard.svelte';
   import {
     conversations,
     conversationsByStatus, columns, archiveColumn, updateConversationStatus,
     searchMatchIds, searchMode, searchQuery, compactView, collapsedCardIds, focusedConversationId,
     firstConversationId, drafts, addDraft, removeDraft, updateDraft,
-    activeCategories, zoomLevel, columnWidths, setColumnWidth, resetAllColumnWidths
+    activeCategories, zoomLevel, columnWidth, setColumnWidth, resetColumnWidth
   } from '../stores/conversations';
   import { vscode, type Conversation, type ConversationStatus } from '../lib/vscode';
 
@@ -38,7 +39,7 @@
       const { width: w, height: h } = entries[0].contentRect;
       inferredPlacement = inferPlacement(w, h);
       boardWidth = w;
-      clampStoredWidths();
+      clampStoredWidth();
     });
     observer.observe(node);
     return { destroy: () => observer.disconnect() };
@@ -146,56 +147,37 @@
     narrowColumns = { ...narrowColumns, [columnId]: !narrowColumns[columnId] };
   }
 
-  const MIN_COLUMN_WIDTH = 160;
-
   /** No single column may exceed 80% of the visible board width. */
   function maxColumnWidth(): number {
-    return boardWidth > 0 ? Math.floor(boardWidth * 0.8) : Infinity;
+    return maxColumnWidthFor(boardWidth);
   }
 
-  function handleColumnResize(leftId: string, rightId: string, deltaX: number) {
-    if (!leftId || !rightId) return;
-    const leftEl = document.querySelector(`[data-column-id="${leftId}"]`) as HTMLElement;
-    const rightEl = document.querySelector(`[data-column-id="${rightId}"]`) as HTMLElement;
-    if (!leftEl || !rightEl) return;
+  /** Non-narrow columns left of the handle that follows column index `i`. */
+  function nonNarrowBefore(i: number): number {
+    return $columns.slice(0, i).filter(c => !narrowColumns[c.id]).length;
+  }
 
-    // Adjust delta for CSS zoom level
+  /** Every non-narrow column shares one width, so the columns always stay equal. */
+  function handleColumnResize(leftCount: number, deltaX: number) {
     const zoom = get(zoomLevel);
-    const adjustedDelta = deltaX / zoom;
-
-    // Read current widths: prefer stored values to avoid rounding drift
-    const widths = get(columnWidths);
-    const leftWidth = widths[leftId] ?? Math.round(leftEl.getBoundingClientRect().width / zoom);
-    const rightWidth = widths[rightId] ?? Math.round(rightEl.getBoundingClientRect().width / zoom);
-
-    // Fix the total so independent rounding can't accumulate growth
-    const total = leftWidth + rightWidth;
-    const cap = maxColumnWidth();
-    const newLeftWidth = Math.max(MIN_COLUMN_WIDTH, Math.min(total - MIN_COLUMN_WIDTH, cap, Math.round(leftWidth + adjustedDelta)));
-    const newRightWidth = Math.min(cap, total - newLeftWidth);
-
-    setColumnWidth(leftId, newLeftWidth);
-    setColumnWidth(rightId, newRightWidth);
+    let current = get(columnWidth);
+    if (current == null) {
+      const el = document.querySelector('.column-wrapper:not(.narrow)') as HTMLElement | null;
+      if (!el) return;
+      current = el.getBoundingClientRect().width / zoom;
+    }
+    const next = nextColumnWidth(current, deltaX, zoom, leftCount, maxColumnWidth());
+    if (next !== current) setColumnWidth(next);
   }
 
-  // Shrink any column that exceeds the board width (e.g. after window resize)
-  function clampStoredWidths() {
+  // Shrink the shared width if it exceeds the board width (e.g. after window resize)
+  function clampStoredWidth() {
     const cap = maxColumnWidth();
-    if (cap === Infinity) return;
-    const widths = get(columnWidths);
-    let changed = false;
-    for (const [id, w] of Object.entries(widths)) {
-      if (w != null && w > cap) {
-        widths[id] = cap;
-        changed = true;
-      }
-    }
-    if (changed) {
-      columnWidths.set({ ...widths });
-      vscode.mergeState({ columnWidths: get(columnWidths) });
-    }
+    const w = get(columnWidth);
+    if (cap !== Infinity && w != null && w > cap) setColumnWidth(cap);
   }
 
+  $: sharedWidth = !isVertical && $columnWidth != null ? `${$columnWidth}px` : undefined;
 
 </script>
 
@@ -237,11 +219,11 @@
   {#each $columns as column, i (column.id)}
     {#if !isVertical && i > 0}
       <ColumnResizeHandle
-        on:resize={(e) => handleColumnResize($columns[i - 1].id, column.id, e.detail.deltaX)}
-        on:resetWidths={resetAllColumnWidths}
+        on:resize={(e) => handleColumnResize(nonNarrowBefore(i), e.detail.deltaX)}
+        on:resetWidths={resetColumnWidth}
       />
     {/if}
-    <div class="column-wrapper" class:narrow={narrowColumns[column.id]} class:custom-width={$columnWidths[column.id] != null && !narrowColumns[column.id]} data-column-id={column.id} style:width={$columnWidths[column.id] && !narrowColumns[column.id] ? `${$columnWidths[column.id]}px` : undefined} style:flex={$columnWidths[column.id] && !narrowColumns[column.id] ? '0 0 auto' : undefined}>
+    <div class="column-wrapper" class:narrow={narrowColumns[column.id]} class:custom-width={sharedWidth && !narrowColumns[column.id]} data-column-id={column.id} style:width={!narrowColumns[column.id] ? sharedWidth : undefined} style:flex={sharedWidth && !narrowColumns[column.id] ? '0 0 auto' : undefined}>
       <KanbanColumn title={column.title} color={column.color} count={boardItems[column.id].filter(c => !c.isDraft).length} activeCount={boardItems[column.id].filter(c => c.agents.some(a => a.isActive)).length} narrow={narrowColumns[column.id] || false} onToggleNarrow={column.id === 'done' ? () => toggleColumnNarrow(column.id) : null}>
         {#if column.id === 'todo'}
           <div class="quick-idea">
@@ -302,11 +284,11 @@
   {#if showArchive}
     {#if !isVertical}
       <ColumnResizeHandle
-        on:resize={(e) => handleColumnResize($columns[$columns.length - 1].id, 'archived', e.detail.deltaX)}
-        on:resetWidths={resetAllColumnWidths}
+        on:resize={(e) => handleColumnResize(nonNarrowBefore($columns.length), e.detail.deltaX)}
+        on:resetWidths={resetColumnWidth}
       />
     {/if}
-    <div class="column-wrapper archive-column" data-column-id="archived" style:width={$columnWidths['archived'] ? `${$columnWidths['archived']}px` : undefined} style:flex={$columnWidths['archived'] ? '0 0 auto' : undefined}>
+    <div class="column-wrapper archive-column" class:custom-width={!!sharedWidth} data-column-id="archived" style:width={sharedWidth} style:flex={sharedWidth ? '0 0 auto' : undefined}>
       <KanbanColumn title={$archiveColumn.title} color={$archiveColumn.color} count={boardItems['archived'].length} activeCount={0}>
         <div
           class="drop-zone"

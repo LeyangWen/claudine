@@ -14,7 +14,7 @@
     rateLimitInfo,
     indexingProgress, projectManifest,
     zoomLevel, zoomIn, zoomOut, zoomReset, restoreZoom, ZOOM_MIN, ZOOM_MAX,
-    restoreColumnWidths,
+    restoreColumnWidth,
     restorePaneHeights
   } from './stores/conversations';
   import type { Conversation, CategoryFilter } from './lib/vscode';
@@ -54,7 +54,7 @@
     window.addEventListener('message', handleMessage);
     window.addEventListener('keydown', handleKeydown);
     restoreZoom();
-    restoreColumnWidths();
+    restoreColumnWidth();
     restorePaneHeights();
     requestNotificationPermission();
     vscode.postMessage({ type: 'ready' });
