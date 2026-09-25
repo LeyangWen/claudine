@@ -1,6 +1,6 @@
 import { IPlatformAdapter, PlatformEvent, PlatformEventEmitter } from '../platform/IPlatformAdapter';
-import { StorageService } from './StorageService';
-import { Conversation, ConversationStatus } from '../types';
+import { StorageService, StarredEntry } from './StorageService';
+import { Conversation, ConversationStatus, StarMark } from '../types';
 import { SAVE_STATE_DEBOUNCE_MS, NOTIFY_COALESCE_MS } from '../constants';
 
 export class StateManager {
@@ -21,7 +21,7 @@ export class StateManager {
   private _saveTimer: ReturnType<typeof setTimeout> | undefined;
   private _notifyTimer: ReturnType<typeof setTimeout> | undefined;
   private _sortedCache: Conversation[] | null = null;
-  private _starred: Set<string> | null = null;
+  private _stars: Map<string, StarMark> | null = null;
 
   constructor(
     private readonly _storageService: StorageService,
@@ -129,34 +129,46 @@ export class StateManager {
   }
 
   private reloadStars() {
-    this._starred = new Set(Object.keys(this._storageService.readStarred()));
+    this.setStars(this._storageService.readStarred());
+  }
+
+  private setStars(starred: Record<string, StarredEntry>) {
+    this._stars = new Map(Object.entries(starred).map(([id, e]) => [id, e.mark === 'paused' ? 'paused' : 'starred']));
   }
 
   private applyStar(conv: Conversation) {
-    if (!this._starred) this.reloadStars();
-    if (this._starred!.has(conv.id)) conv.starred = true;
-    else delete conv.starred;
+    if (!this._stars) this.reloadStars();
+    const mark = this._stars!.get(conv.id);
+    if (mark) conv.star = mark;
+    else delete conv.star;
   }
 
-  /** Star or unstar a conversation and persist it for every window. */
-  public toggleStar(conversationId: string) {
+  /**
+   * Advance a conversation's star, none -> starred -> paused -> none, and
+   * persist it for every window.
+   */
+  public cycleStar(conversationId: string) {
     const starred = this._storageService.readStarred();
-    if (starred[conversationId]) {
-      delete starred[conversationId];
-    } else {
+    const entry = starred[conversationId];
+    if (!entry) {
       const conv = this._conversations.get(conversationId);
       starred[conversationId] = {
         title: conv?.title ?? '',
         workspacePath: conv?.workspacePath ?? '',
         starredAt: new Date().toISOString(),
+        mark: 'starred',
       };
+    } else if (entry.mark !== 'paused') {
+      entry.mark = 'paused';
+    } else {
+      delete starred[conversationId];
     }
     try {
       this._storageService.writeStarred(starred);
     } catch (error) {
       console.error('Claudine: Error saving starred conversations', error);
     }
-    this._starred = new Set(Object.keys(starred));
+    this.setStars(starred);
     for (const conv of this._conversations.values()) this.applyStar(conv);
     this.invalidateSort();
     this.notifyChange();

@@ -1,5 +1,8 @@
 export type ConversationCategory = 'bug' | 'improvement' | 'report' | 'task';
 
+/** A card's star. The star button cycles none -> starred -> paused -> none. */
+export type StarMark = 'starred' | 'paused';
+
 export type ConversationStatus = 'todo' | 'needs-input' | 'in-progress' | 'in-review' | 'done' | 'cancelled' | 'archived';
 
 export interface Agent {
@@ -41,8 +44,8 @@ export interface Conversation {
   referencedImage?: string;
   originalTitle?: string;
   originalDescription?: string;
-  /** Starred by the user. Persisted in starred.json, shared by all windows. */
-  starred?: boolean;
+  /** Starred or paused by the user. Persisted in starred.json, shared by all windows. */
+  star?: StarMark;
   createdAt: Date;
   updatedAt: Date;
   filePath?: string;
@@ -105,7 +108,7 @@ export type WebviewToExtensionMessage =
   | { type: 'openConversation'; conversationId: string }
   | { type: 'openConversationAs'; conversationId: string; target: OpenConversationTarget }
   | { type: 'openGitBranch'; conversationId: string; branch?: string }
-  | { type: 'toggleStar'; conversationId: string }
+  | { type: 'cycleStar'; conversationId: string }
   | { type: 'moveConversation'; conversationId: string; newStatus: ConversationStatus }
   | { type: 'refreshConversations' }
   | { type: 'toggleSummarization' }

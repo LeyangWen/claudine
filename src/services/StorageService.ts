@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { IPlatformAdapter } from '../platform/IPlatformAdapter';
-import { Conversation } from '../types';
+import { Conversation, StarMark } from '../types';
 
 interface BoardState {
   conversations: Conversation[];
@@ -12,6 +12,8 @@ export interface StarredEntry {
   title: string;
   workspacePath: string;
   starredAt: string;
+  /** Missing on entries written before "paused" existed: read as starred. */
+  mark?: StarMark;
 }
 
 export class StorageService {

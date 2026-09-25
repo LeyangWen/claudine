@@ -1,6 +1,6 @@
 import { writable, derived, get } from 'svelte/store';
 import { vscode } from '../lib/vscode';
-import type { Conversation, ConversationStatus, CategoryFilter, ClaudineSettings, ProjectGroup, IndexingPhase, ProjectManifestEntry } from '../lib/vscode';
+import type { Conversation, ConversationStatus, CategoryFilter, StarMark, ClaudineSettings, ProjectGroup, IndexingPhase, ProjectManifestEntry } from '../lib/vscode';
 import { t } from './locale';
 
 // Main conversations store
@@ -54,7 +54,8 @@ export const compactView = writable(false);
 export const collapsedCardIds = writable<Set<string>>(new Set());
 
 // Category filter: empty set = show all, non-empty = show only selected
-// categories. "starred" narrows further: starred cards of those categories.
+// categories. "starred" and "paused" narrow further: cards with either of the
+// selected marks, of those categories.
 export const activeCategories = writable<Set<CategoryFilter>>(new Set());
 
 export function toggleCategory(cat: CategoryFilter) {
@@ -333,6 +334,12 @@ export const archiveColumn = derived(t, ($t) => ({
   color: '#4b5563',
 }));
 
+/** The star button cycles none -> starred -> paused -> none. */
+export function nextStar(star: StarMark | undefined): StarMark | undefined {
+  if (!star) return 'starred';
+  return star === 'starred' ? 'paused' : undefined;
+}
+
 // Helper function to get category details
 export function getCategoryDetails(category: CategoryFilter): {
   icon: string;
@@ -341,6 +348,7 @@ export function getCategoryDetails(category: CategoryFilter): {
 } {
   const categories: Record<CategoryFilter, { icon: string; color: string; label: string }> = {
     'starred': { icon: '⭐', color: '#eab308', label: 'Starred' },
+    'paused': { icon: '⏸️', color: '#06b6d4', label: 'Paused' },
     'bug': { icon: '🐛', color: '#ef4444', label: 'Bug' },
     'improvement': { icon: '📈', color: '#f59e0b', label: 'Improvement' },
     'report': { icon: '📊', color: '#3b82f6', label: 'Report' },

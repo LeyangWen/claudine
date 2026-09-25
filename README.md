@@ -31,7 +31,8 @@
 > - **Tabs:** unmapped Claude tabs are adopted instead of closed. This fixes the
 >   close-and-reopen loop that stopped Claude from starting after an editor restart.
 > - **Titles:** cards use Claude Code's own session title (`ai-title` / `custom-title`).
-> - **Stars:** a star button on each card and a Starred filter chip, shared by all windows.
+> - **Stars:** a star button on each card that cycles none → starred → paused → none, and
+>   Starred / Paused filter chips, shared by all windows.
 > - **Labels:** Bug / Improvement / Report / Task, and an explicit label at the start of a
 >   title (`Report - …`, `[Bug] …`) wins over the keyword scorer.
 > - **Storage:** a window with no folder open keeps its board in a file, not in shared `globalState`.

@@ -27,7 +27,7 @@
   let aboutOpen = false;
   let showArchive = false;
 
-  const allCategories: CategoryFilter[] = ['starred', 'bug', 'improvement', 'report', 'task'];
+  const allCategories: CategoryFilter[] = ['starred', 'paused', 'bug', 'improvement', 'report', 'task'];
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
   // Debounce search queries → extension for JSONL full-text search

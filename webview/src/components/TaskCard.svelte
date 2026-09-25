@@ -1,6 +1,6 @@
 <script lang="ts">
   import { vscode, type Conversation } from '../lib/vscode';
-  import { getCategoryDetails, toggleCardCollapsed, settings, upsertConversation } from '../stores/conversations';
+  import { getCategoryDetails, toggleCardCollapsed, settings, upsertConversation, nextStar } from '../stores/conversations';
   import AgentAvatar from './AgentAvatar.svelte';
   import PromptInput from './PromptInput.svelte';
 
@@ -122,14 +122,18 @@
     toggleCardCollapsed(conversation.id);
   }
 
-  function handleToggleStar(e: MouseEvent) {
+  $: starLabel = conversation.star === 'starred' ? 'Starred: click to mark paused'
+    : conversation.star === 'paused' ? 'Paused: click to clear'
+    : 'Star conversation';
+
+  function handleCycleStar(e: MouseEvent) {
     e.stopPropagation();
     e.preventDefault();
     if (conversation.isDraft) return;
-    vscode.postMessage({ type: 'toggleStar', conversationId: conversation.id });
+    vscode.postMessage({ type: 'cycleStar', conversationId: conversation.id });
     // Optimistic update. Board columns come from their own store, so go
     // through upsertConversation rather than updating `conversations` alone.
-    upsertConversation({ ...conversation, starred: !conversation.starred });
+    upsertConversation({ ...conversation, star: nextStar(conversation.star) });
   }
 
   function handleOpenConversation() {
@@ -210,8 +214,10 @@
     <div class="drag-handle narrow-drag" title="Drag to move">
       <svg viewBox="0 0 6 10" fill="currentColor"><circle cx="1.5" cy="1.5" r="1"/><circle cx="4.5" cy="1.5" r="1"/><circle cx="1.5" cy="5" r="1"/><circle cx="4.5" cy="5" r="1"/><circle cx="1.5" cy="8.5" r="1"/><circle cx="4.5" cy="8.5" r="1"/></svg>
     </div>
-    {#if conversation.starred}
+    {#if conversation.star === 'starred'}
       <span class="narrow-star" title="Starred">★</span>
+    {:else if conversation.star === 'paused'}
+      <span class="narrow-star paused" title="Paused"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="3" width="3" height="10" rx="1"/><rect x="9" y="3" width="3" height="10" rx="1"/></svg></span>
     {/if}
     {#if conversation.icon}
       <img class="narrow-icon" src={conversation.icon} alt="" />
@@ -310,13 +316,17 @@
     {/if}
     <button
       class="star-btn"
-      class:starred={conversation.starred}
-      on:click={handleToggleStar}
-      title={conversation.starred ? 'Unstar conversation' : 'Star conversation'}
-      aria-label={conversation.starred ? 'Unstar conversation' : 'Star conversation'}
-      aria-pressed={!!conversation.starred}
+      class:starred={conversation.star === 'starred'}
+      class:paused={conversation.star === 'paused'}
+      on:click={handleCycleStar}
+      title={starLabel}
+      aria-label={starLabel}
     >
-      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.4l1.7 4.65 4.96.19-3.9 3.06 1.35 4.76L8 11.3l-4.11 2.76 1.35-4.76-3.9-3.06 4.96-.19z"/></svg>
+      {#if conversation.star === 'paused'}
+        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="3" width="3" height="10" rx="1"/><rect x="9" y="3" width="3" height="10" rx="1"/></svg>
+      {:else}
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.4l1.7 4.65 4.96.19-3.9 3.06 1.35 4.76L8 11.3l-4.11 2.76 1.35-4.76-3.9-3.06 4.96-.19z"/></svg>
+      {/if}
     </button>
     <button class="collapse-toggle" on:click={handleToggleCollapse} title="Expand card">
       <svg viewBox="0 0 16 16" fill="currentColor"><path d="M5.7 13.7L5 13l4.6-4.6L5 3.7l.7-.7 5.3 5.3-5.3 5.4z"/></svg>
@@ -390,13 +400,17 @@
       {/if}
       <button
         class="star-btn"
-        class:starred={conversation.starred}
-        on:click={handleToggleStar}
-        title={conversation.starred ? 'Unstar conversation' : 'Star conversation'}
-        aria-label={conversation.starred ? 'Unstar conversation' : 'Star conversation'}
-        aria-pressed={!!conversation.starred}
+        class:starred={conversation.star === 'starred'}
+        class:paused={conversation.star === 'paused'}
+        on:click={handleCycleStar}
+        title={starLabel}
+        aria-label={starLabel}
       >
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.4l1.7 4.65 4.96.19-3.9 3.06 1.35 4.76L8 11.3l-4.11 2.76 1.35-4.76-3.9-3.06 4.96-.19z"/></svg>
+        {#if conversation.star === 'paused'}
+          <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="3" width="3" height="10" rx="1"/><rect x="9" y="3" width="3" height="10" rx="1"/></svg>
+        {:else}
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.4l1.7 4.65 4.96.19-3.9 3.06 1.35 4.76L8 11.3l-4.11 2.76 1.35-4.76-3.9-3.06 4.96-.19z"/></svg>
+        {/if}
       </button>
       <button class="collapse-toggle" on:click={handleToggleCollapse} title="Collapse card">
         <svg viewBox="0 0 16 16" fill="currentColor"><path d="M10.3 2.3L11 3 6.4 7.6 11 12.3l-.7.7L5 7.7l5.3-5.4z"/></svg>
@@ -791,7 +805,12 @@
   .star-btn:hover, .star-btn:focus-visible { opacity: 1 !important; color: #eab308; }
   .star-btn.starred { opacity: 1; color: #eab308; }
   .star-btn.starred svg { fill: currentColor; }
+  .star-btn.paused { opacity: 1; color: #06b6d4; }
+  .star-btn.paused:hover, .star-btn.paused:focus-visible { color: #06b6d4; }
+  .star-btn.paused svg { fill: currentColor; stroke: none; }
   .narrow-star { color: #eab308; font-size: 10px; line-height: 1; text-align: center; }
+  .narrow-star.paused { color: #06b6d4; display: flex; justify-content: center; }
+  .narrow-star.paused svg { width: 10px; height: 10px; fill: currentColor; }
   .task-card:hover .collapse-toggle { opacity: 0.6; }
   .collapse-toggle:hover { opacity: 1 !important; color: var(--vscode-foreground, #cccccc); }
 

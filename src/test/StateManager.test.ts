@@ -390,33 +390,57 @@ describe('StateManager', () => {
   });
 
   describe('stars', () => {
+    const entry = (mark?: 'starred' | 'paused') => ({ title: 'x', workspacePath: '', starredAt: '', ...(mark ? { mark } : {}) });
+
     it('stars a conversation and persists its title and workspace', () => {
       stateManager.setConversations([makeConversation({ workspacePath: '/work/repo' })]);
-      stateManager.toggleStar('conv-1');
+      stateManager.cycleStar('conv-1');
 
-      expect(stateManager.getConversation('conv-1')!.starred).toBe(true);
+      expect(stateManager.getConversation('conv-1')!.star).toBe('starred');
       const written = mockStorage.writeStarred.mock.calls[0][0];
       expect(Object.keys(written)).toEqual(['conv-1']);
-      expect(written['conv-1']).toMatchObject({ title: 'Test Conversation', workspacePath: '/work/repo' });
+      expect(written['conv-1']).toMatchObject({ title: 'Test Conversation', workspacePath: '/work/repo', mark: 'starred' });
     });
 
-    it('unstars on a second toggle', () => {
+    it('marks a starred conversation paused on a second click', () => {
       stateManager.setConversations([makeConversation()]);
-      mockStorage.readStarred.mockReturnValue({ 'conv-1': { title: 'x', workspacePath: '', starredAt: '' } });
-      stateManager.toggleStar('conv-1');
+      mockStorage.readStarred.mockReturnValue({ 'conv-1': entry('starred') });
+      stateManager.cycleStar('conv-1');
 
-      expect(stateManager.getConversation('conv-1')!.starred).toBeUndefined();
+      expect(stateManager.getConversation('conv-1')!.star).toBe('paused');
+      expect(mockStorage.writeStarred.mock.calls[0][0]['conv-1']).toMatchObject({ title: 'x', mark: 'paused' });
+    });
+
+    it('clears a paused conversation on a third click', () => {
+      stateManager.setConversations([makeConversation()]);
+      mockStorage.readStarred.mockReturnValue({ 'conv-1': entry('paused') });
+      stateManager.cycleStar('conv-1');
+
+      expect(stateManager.getConversation('conv-1')!.star).toBeUndefined();
       expect(mockStorage.writeStarred).toHaveBeenLastCalledWith({});
     });
 
-    it('picks up stars written by another window on the next scan', () => {
-      mockStorage.readStarred.mockReturnValue({ 'conv-1': { title: 'x', workspacePath: '', starredAt: '' } });
+    it('reads entries written before paused existed as starred', () => {
+      mockStorage.readStarred.mockReturnValue({ 'conv-1': entry() });
       stateManager.setConversations([makeConversation()]);
-      expect(stateManager.getConversation('conv-1')!.starred).toBe(true);
+      expect(stateManager.getConversation('conv-1')!.star).toBe('starred');
+
+      stateManager.cycleStar('conv-1');
+      expect(stateManager.getConversation('conv-1')!.star).toBe('paused');
+    });
+
+    it('picks up marks written by another window on the next scan', () => {
+      mockStorage.readStarred.mockReturnValue({ 'conv-1': entry('starred') });
+      stateManager.setConversations([makeConversation()]);
+      expect(stateManager.getConversation('conv-1')!.star).toBe('starred');
+
+      mockStorage.readStarred.mockReturnValue({ 'conv-1': entry('paused') });
+      stateManager.setConversations([makeConversation()]);
+      expect(stateManager.getConversation('conv-1')!.star).toBe('paused');
 
       mockStorage.readStarred.mockReturnValue({});
       stateManager.setConversations([makeConversation()]);
-      expect(stateManager.getConversation('conv-1')!.starred).toBeUndefined();
+      expect(stateManager.getConversation('conv-1')!.star).toBeUndefined();
     });
   });
 
