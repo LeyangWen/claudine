@@ -32,7 +32,7 @@
 >   close-and-reopen loop that stopped Claude from starting after an editor restart.
 > - **Titles:** cards use Claude Code's own session title (`ai-title` / `custom-title`).
 > - **Stars:** a star button on each card that cycles none → starred → paused → almost
->   done → none, and Starred / Paused / Almost done filter chips, shared by all windows.
+>   done (a red progress pie, and the card gets a red glow) → none, and Starred / Paused / Almost done filter chips, shared by all windows.
 > - **Parked column:** between In Review and Done, for sessions set aside for later (managers,
 >   trackers). A card stays parked until its session gets a new message, then rejoins the
 >   normal cycle and finishes in In Review. Parked cards are never auto-archived.

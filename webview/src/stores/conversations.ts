@@ -354,7 +354,7 @@ export function getCategoryDetails(category: CategoryFilter): {
   const categories: Record<CategoryFilter, { icon: string; color: string; label: string }> = {
     'starred': { icon: '⭐', color: '#eab308', label: 'Starred' },
     'paused': { icon: '⏸️', color: '#06b6d4', label: 'Paused' },
-    'almost-done': { icon: '🏁', color: '#84cc16', label: 'Almost done' },
+    'almost-done': { icon: '🏁', color: '#ff2d2d', label: 'Almost done' },
     'bug': { icon: '🐛', color: '#ef4444', label: 'Bug' },
     'improvement': { icon: '📈', color: '#f59e0b', label: 'Improvement' },
     'report': { icon: '📊', color: '#3b82f6', label: 'Report' },

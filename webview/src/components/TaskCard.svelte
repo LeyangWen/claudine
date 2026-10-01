@@ -208,6 +208,7 @@
     bind:this={cardEl}
     class="task-card narrow-card"
     class:has-error={conversation.hasError}
+    class:almost-done={conversation.star === 'almost-done'}
     class:focused
     style="--category-color: {categoryDetails.color}"
     title={cleanTitle(displayTitle)}
@@ -254,6 +255,7 @@
     bind:this={cardEl}
     class="task-card compact"
     class:has-error={conversation.hasError}
+    class:almost-done={conversation.star === 'almost-done'}
     class:focused
     style="--category-color: {categoryDetails.color}"
   >
@@ -345,6 +347,7 @@
     bind:this={cardEl}
     class="task-card"
     class:has-error={conversation.hasError}
+    class:almost-done={conversation.star === 'almost-done'}
     class:has-question={conversation.hasQuestion}
     class:needs-input={needsInteraction}
     class:focused
@@ -558,6 +561,14 @@
     border-left: 3px solid var(--category-color);
   }
   .task-card:hover { border-color: var(--vscode-focusBorder, #007acc); box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+  /* Almost done: a red ring and glow so the card stands out across the board.
+     After :hover so hovering keeps it red; the left edge keeps the category color. */
+  .task-card.almost-done {
+    border-color: #ff2d2d;
+    border-left-color: var(--category-color);
+    background: rgba(255,45,45,0.08);
+    box-shadow: 0 0 0 1px #ff2d2d, 0 0 10px rgba(255,45,45,0.55);
+  }
   .task-card.has-error { border-color: #ef4444; background: rgba(239,68,68,0.05); }
   .task-card.needs-input { border-color: #f59e0b; background: rgba(245,158,11,0.05); }
   .task-card.focused { outline: 2px solid var(--vscode-focusBorder, #007acc); outline-offset: 1px; }
@@ -817,13 +828,14 @@
   .star-btn.paused { opacity: 1; color: #06b6d4; }
   .star-btn.paused:hover, .star-btn.paused:focus-visible { color: #06b6d4; }
   .star-btn.paused svg { fill: currentColor; stroke: none; }
-  .star-btn.almost-done { opacity: 1; color: #84cc16; }
-  .star-btn.almost-done:hover, .star-btn.almost-done:focus-visible { color: #84cc16; }
+  .star-btn.almost-done { opacity: 1; color: #ff2d2d; }
+  .star-btn.almost-done:hover, .star-btn.almost-done:focus-visible { color: #ff2d2d; }
+  .star-btn.almost-done svg { width: 16px; height: 16px; }
   .narrow-star { color: #eab308; font-size: 10px; line-height: 1; text-align: center; }
   .narrow-star.paused { color: #06b6d4; display: flex; justify-content: center; }
   .narrow-star.paused svg { width: 10px; height: 10px; fill: currentColor; }
-  .narrow-star.almost-done { color: #84cc16; display: flex; justify-content: center; }
-  .narrow-star.almost-done svg { width: 10px; height: 10px; }
+  .narrow-star.almost-done { color: #ff2d2d; display: flex; justify-content: center; }
+  .narrow-star.almost-done svg { width: 13px; height: 13px; }
   .task-card:hover .collapse-toggle { opacity: 0.6; }
   .collapse-toggle:hover { opacity: 1 !important; color: var(--vscode-foreground, #cccccc); }
 
