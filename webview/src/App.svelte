@@ -10,7 +10,7 @@
     focusedConversationId, searchQuery, searchMode, compactView,
     extensionSearchMatchIds, loadDraftsFromExtension,
     expandAllCards, collapseAllCards,
-    activeCategories, toggleCategory, clearCategoryFilter, getCategoryDetails,
+    activeCategories, toggleCategory, clearCategoryFilter, getCategoryDetails, starMarks,
     rateLimitInfo,
     indexingProgress, projectManifest,
     zoomLevel, zoomIn, zoomOut, zoomReset, restoreZoom, ZOOM_MIN, ZOOM_MAX,
@@ -27,7 +27,7 @@
   let aboutOpen = false;
   let showArchive = false;
 
-  const allCategories: CategoryFilter[] = ['starred', 'paused', 'bug', 'improvement', 'report', 'task'];
+  const allCategories: CategoryFilter[] = [...starMarks, 'bug', 'improvement', 'report', 'task'];
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
   // Debounce search queries → extension for JSONL full-text search

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
 import { StateManager } from '../services/StateManager';
-import { Conversation, ConversationStatus } from '../types';
+import { Conversation, ConversationStatus, StarMark } from '../types';
 import { NOTIFY_COALESCE_MS } from '../constants';
 import type { IPlatformAdapter, PlatformEventEmitter, PlatformEvent, Disposable } from '../platform/IPlatformAdapter';
 
@@ -465,7 +465,7 @@ describe('StateManager', () => {
   });
 
   describe('stars', () => {
-    const entry = (mark?: 'starred' | 'paused') => ({ title: 'x', workspacePath: '', starredAt: '', ...(mark ? { mark } : {}) });
+    const entry = (mark?: StarMark) => ({ title: 'x', workspacePath: '', starredAt: '', ...(mark ? { mark } : {}) });
 
     it('stars a conversation and persists its title and workspace', () => {
       stateManager.setConversations([makeConversation({ workspacePath: '/work/repo' })]);
@@ -486,9 +486,18 @@ describe('StateManager', () => {
       expect(mockStorage.writeStarred.mock.calls[0][0]['conv-1']).toMatchObject({ title: 'x', mark: 'paused' });
     });
 
-    it('clears a paused conversation on a third click', () => {
+    it('marks a paused conversation almost done on a third click', () => {
       stateManager.setConversations([makeConversation()]);
       mockStorage.readStarred.mockReturnValue({ 'conv-1': entry('paused') });
+      stateManager.cycleStar('conv-1');
+
+      expect(stateManager.getConversation('conv-1')!.star).toBe('almost-done');
+      expect(mockStorage.writeStarred.mock.calls[0][0]['conv-1']).toMatchObject({ title: 'x', mark: 'almost-done' });
+    });
+
+    it('clears an almost-done conversation on a fourth click', () => {
+      stateManager.setConversations([makeConversation()]);
+      mockStorage.readStarred.mockReturnValue({ 'conv-1': entry('almost-done') });
       stateManager.cycleStar('conv-1');
 
       expect(stateManager.getConversation('conv-1')!.star).toBeUndefined();
@@ -512,6 +521,10 @@ describe('StateManager', () => {
       mockStorage.readStarred.mockReturnValue({ 'conv-1': entry('paused') });
       stateManager.setConversations([makeConversation()]);
       expect(stateManager.getConversation('conv-1')!.star).toBe('paused');
+
+      mockStorage.readStarred.mockReturnValue({ 'conv-1': entry('almost-done') });
+      stateManager.setConversations([makeConversation()]);
+      expect(stateManager.getConversation('conv-1')!.star).toBe('almost-done');
 
       mockStorage.readStarred.mockReturnValue({});
       stateManager.setConversations([makeConversation()]);

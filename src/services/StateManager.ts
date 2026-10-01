@@ -133,7 +133,7 @@ export class StateManager {
   }
 
   private setStars(starred: Record<string, StarredEntry>) {
-    this._stars = new Map(Object.entries(starred).map(([id, e]) => [id, e.mark === 'paused' ? 'paused' : 'starred']));
+    this._stars = new Map(Object.entries(starred).map(([id, e]) => [id, e.mark === 'paused' || e.mark === 'almost-done' ? e.mark : 'starred']));
   }
 
   private applyStar(conv: Conversation) {
@@ -144,8 +144,8 @@ export class StateManager {
   }
 
   /**
-   * Advance a conversation's star, none -> starred -> paused -> none, and
-   * persist it for every window.
+   * Advance a conversation's star, none -> starred -> paused -> almost-done
+   * -> none, and persist it for every window.
    */
   public cycleStar(conversationId: string) {
     const starred = this._storageService.readStarred();
@@ -158,10 +158,12 @@ export class StateManager {
         starredAt: new Date().toISOString(),
         mark: 'starred',
       };
-    } else if (entry.mark !== 'paused') {
-      entry.mark = 'paused';
-    } else {
+    } else if (entry.mark === 'paused') {
+      entry.mark = 'almost-done';
+    } else if (entry.mark === 'almost-done') {
       delete starred[conversationId];
+    } else {
+      entry.mark = 'paused';
     }
     try {
       this._storageService.writeStarred(starred);

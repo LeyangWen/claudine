@@ -123,7 +123,8 @@
   }
 
   $: starLabel = conversation.star === 'starred' ? 'Starred: click to mark paused'
-    : conversation.star === 'paused' ? 'Paused: click to clear'
+    : conversation.star === 'paused' ? 'Paused: click to mark almost done'
+    : conversation.star === 'almost-done' ? 'Almost done: click to clear'
     : 'Star conversation';
 
   function handleCycleStar(e: MouseEvent) {
@@ -218,6 +219,8 @@
       <span class="narrow-star" title="Starred">★</span>
     {:else if conversation.star === 'paused'}
       <span class="narrow-star paused" title="Paused"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="3" width="3" height="10" rx="1"/><rect x="9" y="3" width="3" height="10" rx="1"/></svg></span>
+    {:else if conversation.star === 'almost-done'}
+      <span class="narrow-star almost-done" title="Almost done"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 8V3.5a4.5 4.5 0 1 1-4.5 4.5z" fill="currentColor" stroke="none"/></svg></span>
     {/if}
     {#if conversation.icon}
       <img class="narrow-icon" src={conversation.icon} alt="" />
@@ -318,12 +321,15 @@
       class="star-btn"
       class:starred={conversation.star === 'starred'}
       class:paused={conversation.star === 'paused'}
+      class:almost-done={conversation.star === 'almost-done'}
       on:click={handleCycleStar}
       title={starLabel}
       aria-label={starLabel}
     >
       {#if conversation.star === 'paused'}
         <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="3" width="3" height="10" rx="1"/><rect x="9" y="3" width="3" height="10" rx="1"/></svg>
+      {:else if conversation.star === 'almost-done'}
+        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 8V3.5a4.5 4.5 0 1 1-4.5 4.5z" fill="currentColor" stroke="none"/></svg>
       {:else}
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.4l1.7 4.65 4.96.19-3.9 3.06 1.35 4.76L8 11.3l-4.11 2.76 1.35-4.76-3.9-3.06 4.96-.19z"/></svg>
       {/if}
@@ -402,12 +408,15 @@
         class="star-btn"
         class:starred={conversation.star === 'starred'}
         class:paused={conversation.star === 'paused'}
+        class:almost-done={conversation.star === 'almost-done'}
         on:click={handleCycleStar}
         title={starLabel}
         aria-label={starLabel}
       >
         {#if conversation.star === 'paused'}
           <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="3" width="3" height="10" rx="1"/><rect x="9" y="3" width="3" height="10" rx="1"/></svg>
+        {:else if conversation.star === 'almost-done'}
+          <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 8V3.5a4.5 4.5 0 1 1-4.5 4.5z" fill="currentColor" stroke="none"/></svg>
         {:else}
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.4l1.7 4.65 4.96.19-3.9 3.06 1.35 4.76L8 11.3l-4.11 2.76 1.35-4.76-3.9-3.06 4.96-.19z"/></svg>
         {/if}
@@ -808,9 +817,13 @@
   .star-btn.paused { opacity: 1; color: #06b6d4; }
   .star-btn.paused:hover, .star-btn.paused:focus-visible { color: #06b6d4; }
   .star-btn.paused svg { fill: currentColor; stroke: none; }
+  .star-btn.almost-done { opacity: 1; color: #84cc16; }
+  .star-btn.almost-done:hover, .star-btn.almost-done:focus-visible { color: #84cc16; }
   .narrow-star { color: #eab308; font-size: 10px; line-height: 1; text-align: center; }
   .narrow-star.paused { color: #06b6d4; display: flex; justify-content: center; }
   .narrow-star.paused svg { width: 10px; height: 10px; fill: currentColor; }
+  .narrow-star.almost-done { color: #84cc16; display: flex; justify-content: center; }
+  .narrow-star.almost-done svg { width: 10px; height: 10px; }
   .task-card:hover .collapse-toggle { opacity: 0.6; }
   .collapse-toggle:hover { opacity: 1 !important; color: var(--vscode-foreground, #cccccc); }
 

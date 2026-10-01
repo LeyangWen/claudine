@@ -54,8 +54,8 @@ export const compactView = writable(false);
 export const collapsedCardIds = writable<Set<string>>(new Set());
 
 // Category filter: empty set = show all, non-empty = show only selected
-// categories. "starred" and "paused" narrow further: cards with either of the
-// selected marks, of those categories.
+// categories. The star marks ("starred", "paused", "almost-done") narrow
+// further: cards with any of the selected marks, of those categories.
 export const activeCategories = writable<Set<CategoryFilter>>(new Set());
 
 export function toggleCategory(cat: CategoryFilter) {
@@ -336,10 +336,13 @@ export const archiveColumn = derived(t, ($t) => ({
   color: '#4b5563',
 }));
 
-/** The star button cycles none -> starred -> paused -> none. */
+/** Star marks in the order the star button cycles through them. */
+export const starMarks: StarMark[] = ['starred', 'paused', 'almost-done'];
+
+/** The star button cycles none -> starred -> paused -> almost-done -> none. */
 export function nextStar(star: StarMark | undefined): StarMark | undefined {
-  if (!star) return 'starred';
-  return star === 'starred' ? 'paused' : undefined;
+  if (!star) return starMarks[0];
+  return starMarks[starMarks.indexOf(star) + 1];
 }
 
 // Helper function to get category details
@@ -351,6 +354,7 @@ export function getCategoryDetails(category: CategoryFilter): {
   const categories: Record<CategoryFilter, { icon: string; color: string; label: string }> = {
     'starred': { icon: '⭐', color: '#eab308', label: 'Starred' },
     'paused': { icon: '⏸️', color: '#06b6d4', label: 'Paused' },
+    'almost-done': { icon: '🏁', color: '#84cc16', label: 'Almost done' },
     'bug': { icon: '🐛', color: '#ef4444', label: 'Bug' },
     'improvement': { icon: '📈', color: '#f59e0b', label: 'Improvement' },
     'report': { icon: '📊', color: '#3b82f6', label: 'Report' },

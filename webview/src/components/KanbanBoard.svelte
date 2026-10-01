@@ -10,7 +10,7 @@
     conversationsByStatus, columns, archiveColumn, updateConversationStatus,
     searchMatchIds, searchMode, searchQuery, compactView, collapsedCardIds, focusedConversationId,
     firstConversationId, drafts, addDraft, removeDraft, updateDraft,
-    activeCategories, zoomLevel, columnWidth, setColumnWidth, resetColumnWidth
+    activeCategories, starMarks, zoomLevel, columnWidth, setColumnWidth, resetColumnWidth
   } from '../stores/conversations';
   import { vscode, type Conversation, type ConversationStatus } from '../lib/vscode';
 
@@ -113,10 +113,10 @@
 
   function isVisible(id: string, matchIds: Set<string> | null, mode: string, conversation: Conversation, catFilter: Set<string>): boolean {
     // Category filter: if active, hide non-matching categories. The star
-    // chips (Starred, Paused) match either selected mark and are ANDed with
-    // the categories: Starred + Bug shows only starred bugs.
+    // chips (Starred, Paused, Almost done) match any selected mark and are
+    // ANDed with the categories: Starred + Bug shows only starred bugs.
     if (catFilter.size > 0) {
-      const starChips = (catFilter.has('starred') ? 1 : 0) + (catFilter.has('paused') ? 1 : 0);
+      const starChips = starMarks.filter(m => catFilter.has(m)).length;
       if (starChips > 0 && !(conversation.star && catFilter.has(conversation.star))) return false;
       if (catFilter.size > starChips && !catFilter.has(conversation.category)) return false;
     }

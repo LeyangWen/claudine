@@ -1,7 +1,7 @@
 export type ConversationCategory = 'bug' | 'improvement' | 'report' | 'task';
 
-/** A card's star. The star button cycles none -> starred -> paused -> none. */
-export type StarMark = 'starred' | 'paused';
+/** A card's star. The star button cycles none -> starred -> paused -> almost-done -> none. */
+export type StarMark = 'starred' | 'paused' | 'almost-done';
 
 export type ConversationStatus = 'todo' | 'needs-input' | 'in-progress' | 'in-review' | 'parked' | 'done' | 'cancelled' | 'archived';
 
@@ -46,7 +46,7 @@ export interface Conversation {
   backgroundTasks?: number;
   originalTitle?: string;
   originalDescription?: string;
-  /** Starred or paused by the user. Persisted in starred.json, shared by all windows. */
+  /** Starred, paused or marked almost done by the user. Persisted in starred.json, shared by all windows. */
   star?: StarMark;
   createdAt: Date;
   updatedAt: Date;

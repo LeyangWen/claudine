@@ -137,8 +137,8 @@ export const vscode = new VSCodeAPIWrapper();
 
 // Message types (matching the extension types)
 export type ConversationCategory = 'bug' | 'improvement' | 'report' | 'task';
-/** A card's star. The star button cycles none -> starred -> paused -> none. */
-export type StarMark = 'starred' | 'paused';
+/** A card's star. The star button cycles none -> starred -> paused -> almost-done -> none. */
+export type StarMark = 'starred' | 'paused' | 'almost-done';
 /** A filter-bar chip: a category, or a star mark (ANDed with any categories). */
 export type CategoryFilter = ConversationCategory | StarMark;
 export type ConversationStatus = 'todo' | 'needs-input' | 'in-progress' | 'in-review' | 'parked' | 'done' | 'cancelled' | 'archived';
