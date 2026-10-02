@@ -50,7 +50,8 @@ export const errors = writable<string[]>([]);
 export const searchQuery = writable('');
 export const searchMode = writable<'fade' | 'hide'>('fade');
 export const focusedConversationId = writable<string | null>(null);
-export const compactView = writable(false);
+// Compact view is on when the board opens; the toolbar button switches to full view.
+export const compactView = writable(true);
 export const collapsedCardIds = writable<Set<string>>(new Set());
 
 // Category filter: empty set = show all, non-empty = show only selected
