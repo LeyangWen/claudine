@@ -89,7 +89,7 @@ describe('ConversationParser', () => {
       expect(result!.title).not.toContain('ide_opened_file');
     });
 
-    it('prefers the session title Claude Code recorded, last record wins', async () => {
+    it('prefers the session title Claude Code recorded', async () => {
       const content = [
         fixtures.userMessage('please look at the flaky login test', 10),
         JSON.stringify({ type: 'ai-title', aiTitle: 'Investigate flaky login test', sessionId: 's1' }),
@@ -98,6 +98,61 @@ describe('ConversationParser', () => {
       ].join('\n');
       const result = await parseContent(content);
       expect(result!.title).toBe('Fix flaky login test');
+    });
+
+    it('uses the last ai-title when the session was never renamed', async () => {
+      const content = [
+        fixtures.userMessage('please look at the flaky login test', 10),
+        JSON.stringify({ type: 'ai-title', aiTitle: 'Investigate flaky login test', sessionId: 's1' }),
+        fixtures.assistantMessage('Looking now.', 9),
+        JSON.stringify({ type: 'ai-title', aiTitle: 'Flaky login test timeout', sessionId: 's1' }),
+      ].join('\n');
+      const result = await parseContent(content);
+      expect(result!.title).toBe('Flaky login test timeout');
+    });
+
+    // BUG7: Claude Code re-appends custom-title and then the stale ai-title on every turn.
+    it('keeps the custom title when an ai-title is recorded after it (BUG7)', async () => {
+      const content = [
+        fixtures.userMessage('please look at the flaky login test', 10),
+        JSON.stringify({ type: 'ai-title', aiTitle: 'Investigate flaky login test', sessionId: 's1' }),
+        JSON.stringify({ type: 'custom-title', customTitle: 'Bug - flaky login', sessionId: 's1' }),
+        fixtures.assistantMessage('Looking now.', 9),
+        JSON.stringify({ type: 'custom-title', customTitle: 'Bug - flaky login', sessionId: 's1' }),
+        JSON.stringify({ type: 'ai-title', aiTitle: 'Investigate flaky login test', sessionId: 's1' }),
+      ].join('\n');
+      const result = await parseContent(content);
+      expect(result!.title).toBe('Bug - flaky login');
+    });
+
+    // BUG7: the title shown right after a rename must survive the next turn's records.
+    it('keeps the custom title across an incremental re-parse (BUG7)', async () => {
+      const initial = [
+        fixtures.userMessage('please look at the flaky login test', 10),
+        JSON.stringify({ type: 'ai-title', aiTitle: 'Investigate flaky login test', sessionId: 's1' }),
+        JSON.stringify({ type: 'custom-title', customTitle: 'Bug - flaky login', sessionId: 's1' }),
+      ].join('\n');
+      const first = await parseContent(initial);
+      expect(first!.title).toBe('Bug - flaky login');
+
+      const appended = '\n' + [
+        fixtures.assistantMessage('Looking now.', 9),
+        JSON.stringify({ type: 'custom-title', customTitle: 'Bug - flaky login', sessionId: 's1' }),
+        JSON.stringify({ type: 'ai-title', aiTitle: 'Investigate flaky login test', sessionId: 's1' }),
+      ].join('\n');
+      const appendedBuffer = Buffer.from(appended, 'utf-8');
+      mockStat.mockResolvedValue({ size: Buffer.byteLength(initial + appended, 'utf-8') } as any);
+      vi.mocked(fsp.open).mockResolvedValue({
+        read: vi.fn().mockImplementation(async (buf: Buffer, offset: number, length: number) => {
+          appendedBuffer.copy(buf, offset, 0, Math.min(length, appendedBuffer.length));
+          return { bytesRead: Math.min(length, appendedBuffer.length), buffer: buf };
+        }),
+        close: vi.fn().mockResolvedValue(undefined),
+      } as any);
+
+      const second = await parser.parseFile('/home/user/.claude/projects/test-project/abc123.jsonl');
+      expect(vi.mocked(fsp.open)).toHaveBeenCalled();
+      expect(second!.title).toBe('Bug - flaky login');
     });
 
     it('falls back to the first user message when no title record exists', async () => {

@@ -32,8 +32,10 @@ interface ParseCache {
   firstTimestamp: string | undefined;
   lastTimestamp: string | undefined;
   gitBranch: string | undefined;
-  /** Latest session title Claude Code recorded (ai-title or custom-title). */
-  sessionTitle?: string;
+  /** Latest user-set session title (custom-title). Outranks aiTitle (BUG7). */
+  customTitle?: string;
+  /** Latest generated session title (ai-title). */
+  aiTitle?: string;
   /** BUG6: background tasks launched but not yet reported finished. */
   backgroundTasks: Set<string>;
 }
@@ -93,7 +95,7 @@ export class ConversationParser {
         // No new data — promote in LRU and rebuild from cached messages
         this.touchCache(filePath, cached);
         if (cached.messages.length === 0) return null;
-        return await this.buildConversation(filePath, cached.messages, cached.firstTimestamp, cached.lastTimestamp, cached.gitBranch, cached.sidechainSteps, cached.sessionTitle, this.pendingBackgroundTasks(cached));
+        return await this.buildConversation(filePath, cached.messages, cached.firstTimestamp, cached.lastTimestamp, cached.gitBranch, cached.sidechainSteps, cached.customTitle || cached.aiTitle, this.pendingBackgroundTasks(cached));
       }
 
       if (cached && cached.byteOffset < fileSize) {
@@ -128,7 +130,7 @@ export class ConversationParser {
     this.touchCache(filePath, cache);
 
     if (cache.messages.length === 0) return null;
-    return await this.buildConversation(filePath, cache.messages, cache.firstTimestamp, cache.lastTimestamp, cache.gitBranch, cache.sidechainSteps, cache.sessionTitle, this.pendingBackgroundTasks(cache));
+    return await this.buildConversation(filePath, cache.messages, cache.firstTimestamp, cache.lastTimestamp, cache.gitBranch, cache.sidechainSteps, cache.customTitle || cache.aiTitle, this.pendingBackgroundTasks(cache));
   }
 
   private async parseIncremental(filePath: string, cached: ParseCache, fileSize: number): Promise<Conversation | null> {
@@ -147,7 +149,7 @@ export class ConversationParser {
     }
 
     if (cached.messages.length === 0) return null;
-    return await this.buildConversation(filePath, cached.messages, cached.firstTimestamp, cached.lastTimestamp, cached.gitBranch, cached.sidechainSteps, cached.sessionTitle, this.pendingBackgroundTasks(cached));
+    return await this.buildConversation(filePath, cached.messages, cached.firstTimestamp, cached.lastTimestamp, cached.gitBranch, cached.sidechainSteps, cached.customTitle || cached.aiTitle, this.pendingBackgroundTasks(cached));
   }
 
   /** Parse raw JSONL lines and accumulate results into the cache. */
@@ -170,11 +172,14 @@ export class ConversationParser {
           cache.gitBranch = entry.gitBranch;
         }
 
-        // Use the title Claude Code shows for the session; the last record wins.
+        // Use the title Claude Code shows for the session: the last record of
+        // each kind, user-set over generated. BUG7: every turn re-appends the
+        // custom-title and then the stale ai-title, so "last record" is wrong.
         if (entry.type === 'ai-title' || entry.type === 'custom-title') {
           const recorded = entry.type === 'ai-title' ? entry.aiTitle : entry.customTitle;
           if (typeof recorded === 'string' && recorded.trim()) {
-            cache.sessionTitle = recorded.trim();
+            if (entry.type === 'custom-title') cache.customTitle = recorded.trim();
+            else cache.aiTitle = recorded.trim();
           }
           continue;
         }

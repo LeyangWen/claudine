@@ -78,3 +78,9 @@
 - **Symptom:** Running `/model` (or any local command) on a finished session moves its card to In Progress, where it stays.
 - **Root cause:** Local commands write a caveat, the invocation and its output as user records but never start a turn; the parser read the trailing user record as new work.
 - [✔️] Fixed: trailing local-command records (caveat or output present) are ignored for status. Prompt-style commands still count.
+
+## BUG7 — A renamed card goes back to its old title
+- **Reported:** 2026-10-02
+- **Symptom:** After renaming a session, its card keeps the old title, or shows the new one briefly and then switches back.
+- **Root cause:** Claude Code appends the session title records again on every turn, the user's `custom-title` first and the generated `ai-title` right after it. The parser kept whichever record came last, so the old generated title won. Replaying the 67 local transcripts that carry a `custom-title`, 29 cards showed the stale generated title.
+- [✔️] Fixed: the parser keeps the last record of each kind and uses `custom-title` over `ai-title`, falling back to the first user message. Replayed again, all 67 cards match the custom title.
