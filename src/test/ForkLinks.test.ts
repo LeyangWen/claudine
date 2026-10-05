@@ -38,9 +38,24 @@ describe('forkLinks', () => {
     expect(links.byId.get('P')!.id).toBe('P');
   });
 
+  it('numbers each parent\'s forks in the order they were made', () => {
+    conversations.set([
+      card('P'),
+      card('late', { forkedFrom: 'P', forkedAt: '2026-10-05T16:29:52.705Z' }),
+      card('fresh', { forkedFrom: 'P' }),
+      card('early', { forkedFrom: 'P', forkedAt: '2026-10-02T22:29:33.005Z' }),
+      card('G', { forkedFrom: 'late', forkedAt: '2026-10-05T18:38:28.337Z' }),
+    ]);
+    const links = current();
+    expect(links.forks.get('P')!.map(c => c.id)).toEqual(['early', 'late', 'fresh']);
+    expect(Object.fromEntries(links.forkNumber)).toEqual({ early: 1, late: 2, fresh: 3, G: 1 });
+    expect(links.forkNumber.has('P')).toBe(false);
+  });
+
   it('ignores a fork whose parent left the board', () => {
     conversations.set([card('F1', { forkedFrom: 'gone' })]);
     expect(current().forks.size).toBe(0);
+    expect(current().forkNumber.size).toBe(0);
   });
 
   it('strips one fork suffix for the fallback parent title', () => {

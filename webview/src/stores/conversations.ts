@@ -146,8 +146,20 @@ export const firstConversationId = derived(conversations, ($conversations) => {
 
 export interface ForkLinks {
   byId: Map<string, Conversation>;
-  /** Parent id -> the forks made from it that are on the board. */
+  /** Parent id -> the forks made from it that are on the board, in the order they were made. */
   forks: Map<string, Conversation[]>;
+  /** Fork id -> its number among its parent's forks: 1 for the first one made. */
+  forkNumber: Map<string, number>;
+}
+
+/** Oldest fork first; a fork with no known fork time counts as the newest. */
+function byForkTime(a: Conversation, b: Conversation): number {
+  if (a.forkedAt !== b.forkedAt) {
+    if (!a.forkedAt) return 1;
+    if (!b.forkedAt) return -1;
+    return a.forkedAt < b.forkedAt ? -1 : 1;
+  }
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
 /** Fork links between cards, from each fork's forkedFrom. */
@@ -160,7 +172,12 @@ export const forkLinks = derived(conversations, ($conversations): ForkLinks => {
     if (list) list.push(c);
     else forks.set(c.forkedFrom, [c]);
   }
-  return { byId, forks };
+  const forkNumber = new Map<string, number>();
+  for (const list of forks.values()) {
+    list.sort(byForkTime);
+    list.forEach((c, i) => forkNumber.set(c.id, i + 1));
+  }
+  return { byId, forks, forkNumber };
 });
 
 /** The parent's title when the fork was made: Claude Code appends " (fork)". */

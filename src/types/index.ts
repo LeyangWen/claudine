@@ -50,7 +50,7 @@ export interface Conversation {
   star?: StarMark;
   /** Title Claude Code gave the session when it was forked ("<parent title> (fork)"). */
   forkTitle?: string;
-  /** Timestamp of the first record the fork wrote itself (absent until it writes one). */
+  /** When the fork was made: its first own record, else the file's creation time. */
   forkedAt?: string;
   /** Id of the conversation this one was forked from, when it is on the board. */
   forkedFrom?: string;

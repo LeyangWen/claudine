@@ -45,6 +45,8 @@ interface ParseCache {
   forkPoint?: string;
   firstOwnId?: string;
   forkedAt?: string;
+  /** File creation time: when the fork was made, for a fork with no records of its own yet. */
+  fileBornAt?: string;
   lastAssistantId?: string;
   titles: Set<string>;
   messageIds: Set<string>;
@@ -71,10 +73,19 @@ export class ConversationParser {
       forkTitle: cached.forkTitle,
       forkPoint: cached.forkPoint,
       firstOwnId: cached.firstOwnId,
-      forkedAt: cached.forkedAt,
+      forkedAt: this.forkTime(cached),
       titles: cached.titles,
       messageIds: cached.messageIds,
     };
+  }
+
+  /** When the fork was made: its first own record, else the file's creation time. */
+  private forkTime(cache: ParseCache): string | undefined {
+    return cache.forkTitle ? cache.forkedAt ?? cache.fileBornAt : undefined;
+  }
+
+  private forkFields(cache: ParseCache): { forkTitle?: string; forkedAt?: string } {
+    return { forkTitle: cache.forkTitle, forkedAt: this.forkTime(cache) };
   }
 
   /** Clear the parse cache for a specific file (e.g. on deletion). */
@@ -101,8 +112,11 @@ export class ConversationParser {
 
       const cached = this._cache.get(filePath);
       let fileSize: number;
+      let birthtimeMs: number | undefined;
       try {
-        fileSize = (await fsp.stat(filePath)).size;
+        const stats = await fsp.stat(filePath);
+        fileSize = stats.size;
+        birthtimeMs = stats.birthtimeMs;
       } catch {
         return null;
       }
@@ -119,7 +133,7 @@ export class ConversationParser {
         // No new data — promote in LRU and rebuild from cached messages
         this.touchCache(filePath, cached);
         if (cached.messages.length === 0) return null;
-        return await this.buildConversation(filePath, cached.messages, cached.firstTimestamp, cached.lastTimestamp, cached.gitBranch, cached.sidechainSteps, cached.customTitle || cached.aiTitle, this.pendingBackgroundTasks(cached), cached);
+        return await this.buildConversation(filePath, cached.messages, cached.firstTimestamp, cached.lastTimestamp, cached.gitBranch, cached.sidechainSteps, cached.customTitle || cached.aiTitle, this.pendingBackgroundTasks(cached), this.forkFields(cached));
       }
 
       if (cached && cached.byteOffset < fileSize) {
@@ -129,14 +143,14 @@ export class ConversationParser {
       }
 
       // First read: full parse
-      return await this.parseFullFile(filePath, fileSize);
+      return await this.parseFullFile(filePath, fileSize, birthtimeMs);
     } catch (error) {
       console.error(`Claudine: Error parsing file ${filePath}:`, error);
       return null;
     }
   }
 
-  private async parseFullFile(filePath: string, fileSize: number): Promise<Conversation | null> {
+  private async parseFullFile(filePath: string, fileSize: number, birthtimeMs?: number): Promise<Conversation | null> {
     const content = await fsp.readFile(filePath, 'utf-8');
     if (!content.trim()) return null;
 
@@ -149,6 +163,7 @@ export class ConversationParser {
       gitBranch: undefined,
       backgroundTasks: new Set(),
       sawCustomTitle: false,
+      fileBornAt: birthtimeMs && birthtimeMs > 0 ? new Date(birthtimeMs).toISOString() : undefined,
       titles: new Set(),
       messageIds: new Set(),
     };
@@ -157,7 +172,7 @@ export class ConversationParser {
     this.touchCache(filePath, cache);
 
     if (cache.messages.length === 0) return null;
-    return await this.buildConversation(filePath, cache.messages, cache.firstTimestamp, cache.lastTimestamp, cache.gitBranch, cache.sidechainSteps, cache.customTitle || cache.aiTitle, this.pendingBackgroundTasks(cache), cache);
+    return await this.buildConversation(filePath, cache.messages, cache.firstTimestamp, cache.lastTimestamp, cache.gitBranch, cache.sidechainSteps, cache.customTitle || cache.aiTitle, this.pendingBackgroundTasks(cache), this.forkFields(cache));
   }
 
   private async parseIncremental(filePath: string, cached: ParseCache, fileSize: number): Promise<Conversation | null> {
@@ -176,7 +191,7 @@ export class ConversationParser {
     }
 
     if (cached.messages.length === 0) return null;
-    return await this.buildConversation(filePath, cached.messages, cached.firstTimestamp, cached.lastTimestamp, cached.gitBranch, cached.sidechainSteps, cached.customTitle || cached.aiTitle, this.pendingBackgroundTasks(cached), cached);
+    return await this.buildConversation(filePath, cached.messages, cached.firstTimestamp, cached.lastTimestamp, cached.gitBranch, cached.sidechainSteps, cached.customTitle || cached.aiTitle, this.pendingBackgroundTasks(cached), this.forkFields(cached));
   }
 
   /** Parse raw JSONL lines and accumulate results into the cache. */

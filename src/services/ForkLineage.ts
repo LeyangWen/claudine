@@ -21,7 +21,7 @@ export interface LineageFacts {
   forkPoint?: string;
   /** API message id of the fork's first assistant message of its own. */
   firstOwnId?: string;
-  /** Timestamp of the first record the fork wrote itself. */
+  /** When the fork was made: its first own record, else the file's creation time. */
   forkedAt?: string;
   /** Every custom-title and ai-title the session has carried. */
   titles: ReadonlySet<string>;

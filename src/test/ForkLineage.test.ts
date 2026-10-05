@@ -135,9 +135,9 @@ describe('ConversationParser lineage facts', () => {
     vi.mocked(fsp.access).mockRejectedValue(new Error('ENOENT'));
   });
 
-  function parse(lines: object[], filePath: string) {
+  function parse(lines: object[], filePath: string, birthtimeMs?: number) {
     const content = lines.map(l => JSON.stringify(l)).join('\n');
-    vi.mocked(fsp.stat).mockResolvedValue({ size: Buffer.byteLength(content, 'utf-8') } as any);
+    vi.mocked(fsp.stat).mockResolvedValue({ size: Buffer.byteLength(content, 'utf-8'), birthtimeMs } as any);
     vi.mocked(fsp.readFile).mockResolvedValue(content);
     return parser.parseFile(filePath);
   }
@@ -213,5 +213,26 @@ describe('ConversationParser lineage facts', () => {
     expect(conv!.forkTitle).toBe('Exalt accuracy (fork)');
     expect(conv!.forkedAt).toBeUndefined();
     expect(parser.lineageFacts('/p/fresh.jsonl')!.firstOwnId).toBeUndefined();
+  });
+
+  it('dates a fork with no records of its own by when its file was created', async () => {
+    const born = Date.parse('2026-10-05T20:55:50.000Z');
+    const fork = await parse([
+      user('look at the Exalt sheets', '2026-10-01T16:55:37.254Z'),
+      assistant('m1', 'Looking.', '2026-10-01T16:56:00.000Z'),
+      { type: 'custom-title', customTitle: 'Exalt accuracy (fork)', sessionId: 's' },
+    ], '/p/fresh-born.jsonl', born);
+    expect(fork!.forkedAt).toBe('2026-10-05T20:55:50.000Z');
+    expect(parser.lineageFacts('/p/fresh-born.jsonl')!.forkedAt).toBe('2026-10-05T20:55:50.000Z');
+
+    // Its own first record wins once it has one; a non-fork gets no fork time
+    const written = await parse([
+      user('look at the Exalt sheets', '2026-10-01T16:55:37.254Z'),
+      { type: 'custom-title', customTitle: 'Exalt accuracy (fork)', sessionId: 's' },
+      user('lets continue', '2026-10-05T21:00:00.000Z'),
+    ], '/p/written.jsonl', born);
+    expect(written!.forkedAt).toBe('2026-10-05T21:00:00.000Z');
+    const plain = await parse([user('look at the Exalt sheets', '2026-10-01T16:55:37.254Z')], '/p/plain.jsonl', born);
+    expect(plain!.forkedAt).toBeUndefined();
   });
 });
