@@ -84,3 +84,9 @@
 - **Symptom:** After renaming a session, its card keeps the old title, or shows the new one briefly and then switches back.
 - **Root cause:** Claude Code appends the session title records again on every turn, the user's `custom-title` first and the generated `ai-title` right after it. The parser kept whichever record came last, so the old generated title won. Replaying the 67 local transcripts that carry a `custom-title`, 29 cards showed the stale generated title.
 - [✔️] Fixed: the parser keeps the last record of each kind and uses `custom-title` over `ai-title`, falling back to the first user message. Replayed again, all 67 cards match the custom title.
+
+## BUG8 — A forked session shows up as two cards
+- **Reported:** 2026-10-05
+- **Symptom:** After forking a conversation, the board shows two cards that look like the same session, often with the same title.
+- **Root cause:** Claude Code's Fork button copies the parent's history into a new session file, names it "<parent title> (fork)" and switches the tab to it. The parent's card stays, and nothing on either card says how they relate. Forking twice from one parent gives two cards with the same "(fork)" title. The fork's transcript never names its parent.
+- [✔️] Fixed: the parser reads a file's first `custom-title`; when it ends in " (fork)", the file is a fork, and the last copied API message id is its fork point. The watcher links each fork to the card that holds that message, is not one of its own descendants and carried the parent title. Cards show `fork of <parent>` and `forked` (×N). Replayed on 152 local transcripts, all 33 forks link to a parent that holds the fork point and carried the parent title; 3 more forks in another project link the same way.

@@ -436,7 +436,7 @@ export class KanbanViewProvider implements vscode.WebviewViewProvider {
 
   private fingerprint(c: Conversation): string {
     const sc = c.sidechainSteps?.map(s => s.status[0]).join('') ?? '';
-    return `${c.status}|${c.updatedAt.getTime()}|${c.hasError}|${c.isInterrupted}|${c.hasQuestion}|${c.isRateLimited}|${c.icon ? '1' : '0'}|${c.star ?? ''}|${c.title}|${c.lastMessage}|${sc}`;
+    return `${c.status}|${c.updatedAt.getTime()}|${c.hasError}|${c.isInterrupted}|${c.hasQuestion}|${c.isRateLimited}|${c.icon ? '1' : '0'}|${c.star ?? ''}|${c.forkedFrom ?? ''}|${c.forkTitle ?? ''}|${c.title}|${c.lastMessage}|${sc}`;
   }
 
   private sendDiff(conversations: Conversation[]) {

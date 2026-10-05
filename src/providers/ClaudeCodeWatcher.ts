@@ -6,6 +6,7 @@ import { ConversationParser } from './ConversationParser';
 import { StateManager } from '../services/StateManager';
 import { SummaryService } from '../services/SummaryService';
 import { ImageGenerator } from '../services/ImageGenerator';
+import { LineageNode, resolveForkParents } from '../services/ForkLineage';
 import { Conversation, ProjectManifestEntry } from '../types';
 import { MAX_IMAGE_FILE_SIZE_BYTES, REVIEW_SETTLE_MS } from '../constants';
 
@@ -191,6 +192,7 @@ export class ClaudeCodeWatcher {
 
   private applyConversation(conversation: Conversation) {
     this._summaryService.applyCached(conversation);
+    this.linkFork(conversation);
     this._stateManager.updateConversation(conversation);
 
     // Kick off async summarization if not cached
@@ -209,6 +211,33 @@ export class ClaudeCodeWatcher {
         }
       });
     }
+  }
+
+  private lineageNode(conv: Conversation): LineageNode | undefined {
+    const facts = conv.filePath ? this._parser.lineageFacts(conv.filePath) : undefined;
+    return facts && { id: conv.id, createdAt: conv.createdAt.toISOString(), facts };
+  }
+
+  /** Set forkedFrom on every fork in `conversations` whose parent is among them. */
+  private linkForks(conversations: Conversation[]) {
+    const nodes = conversations.map(c => this.lineageNode(c)).filter((n): n is LineageNode => !!n);
+    const parents = resolveForkParents(nodes);
+    for (const conv of conversations) {
+      const parent = parents.get(conv.id);
+      if (parent) conv.forkedFrom = parent;
+      else delete conv.forkedFrom;
+    }
+  }
+
+  /** Set forkedFrom on one updated fork, looking for its parent on the board. */
+  private linkFork(conversation: Conversation) {
+    if (!conversation.forkTitle) return;
+    const others = this._stateManager.getConversations().filter(c => c.id !== conversation.id);
+    const nodes = [conversation, ...others].map(c => this.lineageNode(c)).filter((n): n is LineageNode => !!n);
+    // Keep an earlier link when the parent has dropped out of the parse cache
+    const parent = resolveForkParents(nodes).get(conversation.id)
+      ?? this._stateManager.getConversation(conversation.id)?.forkedFrom;
+    if (parent) conversation.forkedFrom = parent;
   }
 
   private onFileDeleted(filePath: string) {
@@ -284,6 +313,8 @@ export class ClaudeCodeWatcher {
     for (const conv of conversations) {
       this._summaryService.applyCached(conv);
     }
+
+    this.linkForks(conversations);
 
     // Merge with saved board state (for manual overrides like done/cancelled)
     await this.mergeSavedState(conversations);
@@ -482,6 +513,7 @@ export class ClaudeCodeWatcher {
       for (const conv of projectConvs) {
         this._summaryService.applyCached(conv);
       }
+      this.linkForks(projectConvs);
 
       allConversations.push(...projectConvs);
       scannedProjects++;

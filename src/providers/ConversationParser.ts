@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as fsp from 'fs/promises';
 import { CategoryClassifier } from '../services/CategoryClassifier';
+import { LineageFacts, isForkTitle } from '../services/ForkLineage';
 import {
   Conversation,
   ConversationStatus,
@@ -38,6 +39,15 @@ interface ParseCache {
   aiTitle?: string;
   /** BUG6: background tasks launched but not yet reported finished. */
   backgroundTasks: Set<string>;
+  /** Lineage (ForkLineage): a fork's first custom-title is "<parent title> (fork)". */
+  sawCustomTitle: boolean;
+  forkTitle?: string;
+  forkPoint?: string;
+  firstOwnId?: string;
+  forkedAt?: string;
+  lastAssistantId?: string;
+  titles: Set<string>;
+  messageIds: Set<string>;
 }
 
 export class ConversationParser {
@@ -51,6 +61,20 @@ export class ConversationParser {
   /** Number of files currently held in the incremental parse cache. */
   public get cacheSize(): number {
     return this._cache.size;
+  }
+
+  /** Lineage facts of a parsed file, while it is in the parse cache. */
+  public lineageFacts(filePath: string): LineageFacts | undefined {
+    const cached = this._cache.get(filePath);
+    if (!cached) return undefined;
+    return {
+      forkTitle: cached.forkTitle,
+      forkPoint: cached.forkPoint,
+      firstOwnId: cached.firstOwnId,
+      forkedAt: cached.forkedAt,
+      titles: cached.titles,
+      messageIds: cached.messageIds,
+    };
   }
 
   /** Clear the parse cache for a specific file (e.g. on deletion). */
@@ -95,7 +119,7 @@ export class ConversationParser {
         // No new data — promote in LRU and rebuild from cached messages
         this.touchCache(filePath, cached);
         if (cached.messages.length === 0) return null;
-        return await this.buildConversation(filePath, cached.messages, cached.firstTimestamp, cached.lastTimestamp, cached.gitBranch, cached.sidechainSteps, cached.customTitle || cached.aiTitle, this.pendingBackgroundTasks(cached));
+        return await this.buildConversation(filePath, cached.messages, cached.firstTimestamp, cached.lastTimestamp, cached.gitBranch, cached.sidechainSteps, cached.customTitle || cached.aiTitle, this.pendingBackgroundTasks(cached), cached);
       }
 
       if (cached && cached.byteOffset < fileSize) {
@@ -124,13 +148,16 @@ export class ConversationParser {
       lastTimestamp: undefined,
       gitBranch: undefined,
       backgroundTasks: new Set(),
+      sawCustomTitle: false,
+      titles: new Set(),
+      messageIds: new Set(),
     };
 
     this.parseLines(content, cache);
     this.touchCache(filePath, cache);
 
     if (cache.messages.length === 0) return null;
-    return await this.buildConversation(filePath, cache.messages, cache.firstTimestamp, cache.lastTimestamp, cache.gitBranch, cache.sidechainSteps, cache.customTitle || cache.aiTitle, this.pendingBackgroundTasks(cache));
+    return await this.buildConversation(filePath, cache.messages, cache.firstTimestamp, cache.lastTimestamp, cache.gitBranch, cache.sidechainSteps, cache.customTitle || cache.aiTitle, this.pendingBackgroundTasks(cache), cache);
   }
 
   private async parseIncremental(filePath: string, cached: ParseCache, fileSize: number): Promise<Conversation | null> {
@@ -149,7 +176,7 @@ export class ConversationParser {
     }
 
     if (cached.messages.length === 0) return null;
-    return await this.buildConversation(filePath, cached.messages, cached.firstTimestamp, cached.lastTimestamp, cached.gitBranch, cached.sidechainSteps, cached.customTitle || cached.aiTitle, this.pendingBackgroundTasks(cached));
+    return await this.buildConversation(filePath, cached.messages, cached.firstTimestamp, cached.lastTimestamp, cached.gitBranch, cached.sidechainSteps, cached.customTitle || cached.aiTitle, this.pendingBackgroundTasks(cached), cached);
   }
 
   /** Parse raw JSONL lines and accumulate results into the cache. */
@@ -166,6 +193,7 @@ export class ConversationParser {
         if (entry.timestamp) {
           if (!cache.firstTimestamp) cache.firstTimestamp = entry.timestamp;
           cache.lastTimestamp = entry.timestamp;
+          if (cache.forkTitle && !cache.forkedAt) cache.forkedAt = entry.timestamp;
         }
 
         if (entry.gitBranch && entry.gitBranch !== 'HEAD') {
@@ -178,8 +206,20 @@ export class ConversationParser {
         if (entry.type === 'ai-title' || entry.type === 'custom-title') {
           const recorded = entry.type === 'ai-title' ? entry.aiTitle : entry.customTitle;
           if (typeof recorded === 'string' && recorded.trim()) {
-            if (entry.type === 'custom-title') cache.customTitle = recorded.trim();
-            else cache.aiTitle = recorded.trim();
+            const title = recorded.trim();
+            if (entry.type === 'custom-title') {
+              // A fork's copied history carries no title records, so its
+              // first custom-title sits right after the copy.
+              if (!cache.sawCustomTitle && isForkTitle(title)) {
+                cache.forkTitle = title;
+                cache.forkPoint = cache.lastAssistantId;
+              }
+              cache.sawCustomTitle = true;
+              cache.customTitle = title;
+            } else {
+              cache.aiTitle = title;
+            }
+            cache.titles.add(title);
           }
           continue;
         }
@@ -195,6 +235,14 @@ export class ConversationParser {
         if (entry.isSidechain) {
           this.collectSidechainStep(entry, cache);
           continue;
+        }
+
+        // A fork keeps the API message ids of what it copied.
+        if (entry.type === 'assistant' && entry.message.id) {
+          const id = entry.message.id;
+          if (cache.forkTitle && !cache.firstOwnId && id !== cache.forkPoint) cache.firstOwnId = id;
+          cache.messageIds.add(id);
+          cache.lastAssistantId = id;
         }
 
         const parsed = this.parseMessage(entry);
@@ -445,7 +493,8 @@ export class ConversationParser {
     gitBranch: string | undefined,
     sidechainSteps: SidechainStep[] = [],
     sessionTitle?: string,
-    backgroundTasks = 0
+    backgroundTasks = 0,
+    fork: { forkTitle?: string; forkedAt?: string } = {}
   ): Promise<Conversation | null> {
     const id = this.extractSessionId(filePath);
     const title = sessionTitle || this.extractTitle(messages);
@@ -491,6 +540,8 @@ export class ConversationParser {
       sidechainSteps: sidechainSteps.length > 0 ? sidechainSteps : undefined,
       referencedImage: this.extractReferencedImage(messages),
       backgroundTasks,
+      forkTitle: fork.forkTitle,
+      forkedAt: fork.forkedAt,
       createdAt,
       updatedAt,
       filePath,

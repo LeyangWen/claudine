@@ -48,6 +48,12 @@ export interface Conversation {
   originalDescription?: string;
   /** Starred, paused or marked almost done by the user. Persisted in starred.json, shared by all windows. */
   star?: StarMark;
+  /** Title Claude Code gave the session when it was forked ("<parent title> (fork)"). */
+  forkTitle?: string;
+  /** Timestamp of the first record the fork wrote itself (absent until it writes one). */
+  forkedAt?: string;
+  /** Id of the conversation this one was forked from, when it is on the board. */
+  forkedFrom?: string;
   createdAt: Date;
   updatedAt: Date;
   filePath?: string;

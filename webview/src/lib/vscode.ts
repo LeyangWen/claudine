@@ -178,6 +178,11 @@ export interface Conversation {
   icon?: string;
   isDraft?: boolean;
   star?: StarMark;
+  /** Title Claude Code gave the session when it was forked ("<parent title> (fork)"). */
+  forkTitle?: string;
+  forkedAt?: string;
+  /** Id of the conversation this one was forked from, when it is on the board. */
+  forkedFrom?: string;
   originalTitle?: string;
   originalDescription?: string;
   createdAt: Date | string;

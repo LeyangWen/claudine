@@ -144,6 +144,30 @@ export const firstConversationId = derived(conversations, ($conversations) => {
   return earliest.id;
 });
 
+export interface ForkLinks {
+  byId: Map<string, Conversation>;
+  /** Parent id -> the forks made from it that are on the board. */
+  forks: Map<string, Conversation[]>;
+}
+
+/** Fork links between cards, from each fork's forkedFrom. */
+export const forkLinks = derived(conversations, ($conversations): ForkLinks => {
+  const byId = new Map($conversations.map(c => [c.id, c]));
+  const forks = new Map<string, Conversation[]>();
+  for (const c of $conversations) {
+    if (!c.forkedFrom || !byId.has(c.forkedFrom)) continue;
+    const list = forks.get(c.forkedFrom);
+    if (list) list.push(c);
+    else forks.set(c.forkedFrom, [c]);
+  }
+  return { byId, forks };
+});
+
+/** The parent's title when the fork was made: Claude Code appends " (fork)". */
+export function parentTitleOf(forkTitle: string): string {
+  return forkTitle.replace(/ \(fork\)$/, '');
+}
+
 /** Derived rate-limit banner state: active when any conversation is rate-limited. */
 export const rateLimitInfo = derived(conversations, ($conversations) => {
   const limited = $conversations.filter(c => c.isRateLimited);

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { vscode, type Conversation } from '../lib/vscode';
-  import { getCategoryDetails, toggleCardCollapsed, settings, upsertConversation, nextStar } from '../stores/conversations';
+  import { getCategoryDetails, toggleCardCollapsed, settings, upsertConversation, nextStar, forkLinks, parentTitleOf } from '../stores/conversations';
   import AgentAvatar from './AgentAvatar.svelte';
   import PromptInput from './PromptInput.svelte';
 
@@ -32,6 +32,27 @@
   $: descriptionTooltip = conversation.originalDescription
     ? ($settings.enableSummarization ? conversation.originalDescription : conversation.description)
     : conversation.description;
+
+  // Fork labels. Claude Code's Fork button opens the fork in the same tab, so
+  // without them the parent's card and the fork's card look like one session twice.
+  function shownTitle(c: Conversation, summarized: boolean): string {
+    return cleanTitle((c.originalTitle && !summarized) ? c.originalTitle : c.title);
+  }
+  $: forkParent = conversation.forkedFrom ? $forkLinks.byId.get(conversation.forkedFrom) : undefined;
+  $: forkParentTitle = forkParent
+    ? shownTitle(forkParent, $settings.enableSummarization)
+    : conversation.forkTitle ? parentTitleOf(conversation.forkTitle) : '';
+  $: forkedDate = conversation.forkedAt
+    ? new Date(conversation.forkedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+    : '';
+  $: forkTooltip = forkParentTitle
+    ? `Fork of “${forkParentTitle}”${forkedDate ? `, forked ${forkedDate}` : ''}${forkParent ? '' : ' (parent not on this board)'}`
+    : '';
+  $: forkChildren = $forkLinks.forks.get(conversation.id) ?? [];
+  $: forkedLabel = forkChildren.length > 1 ? `forked ×${forkChildren.length}` : 'forked';
+  $: forkedTooltip = forkChildren.length
+    ? `Forked into ${forkChildren.map(c => `“${shownTitle(c, $settings.enableSummarization)}”`).join(', ')}`
+    : '';
 
   let cardEl: HTMLDivElement;
   let prevFocused = false;
@@ -211,7 +232,7 @@
     class:almost-done={conversation.star === 'almost-done'}
     class:focused
     style="--category-color: {categoryDetails.color}"
-    title={cleanTitle(displayTitle)}
+    title={[cleanTitle(displayTitle), forkTooltip, forkedTooltip].filter(Boolean).join('\n')}
   >
     <div class="drag-handle narrow-drag" title="Drag to move">
       <svg viewBox="0 0 6 10" fill="currentColor"><circle cx="1.5" cy="1.5" r="1"/><circle cx="4.5" cy="1.5" r="1"/><circle cx="1.5" cy="5" r="1"/><circle cx="4.5" cy="5" r="1"/><circle cx="1.5" cy="8.5" r="1"/><circle cx="4.5" cy="8.5" r="1"/></svg>
@@ -302,6 +323,12 @@
         </div>
       {/if}
     </div>
+    {#if forkTooltip}
+      <span class="fork-pill" title={forkTooltip}><svg class="fork-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75v-.878a2.25 2.25 0 1 1 1.5 0v.878a2.25 2.25 0 0 1-2.25 2.25h-1.5v2.128a2.251 2.251 0 1 1-1.5 0V8.5h-1.5A2.25 2.25 0 0 1 3.5 6.25v-.878a2.25 2.25 0 1 1 1.5 0ZM5 3.25a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Zm6.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-3 8.75a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Z"/></svg>fork</span>
+    {/if}
+    {#if forkChildren.length}
+      <span class="fork-pill" title={forkedTooltip}><svg class="fork-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75v-.878a2.25 2.25 0 1 1 1.5 0v.878a2.25 2.25 0 0 1-2.25 2.25h-1.5v2.128a2.251 2.251 0 1 1-1.5 0V8.5h-1.5A2.25 2.25 0 0 1 3.5 6.25v-.878a2.25 2.25 0 1 1 1.5 0ZM5 3.25a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Zm6.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-3 8.75a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Z"/></svg>{forkedLabel}</span>
+    {/if}
     {#if conversation.sidechainSteps?.length}
       <div class="sidechain-dots compact" title="Subagent activity">
         {#each conversation.sidechainSteps as step}
@@ -467,6 +494,12 @@
           </svg>
           <span class="branch-name">{@html highlight(conversation.gitBranch || '')}</span>
         </button>
+      {/if}
+      {#if forkTooltip}
+        <span class="fork-pill fork-of" title={forkTooltip}><svg class="fork-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75v-.878a2.25 2.25 0 1 1 1.5 0v.878a2.25 2.25 0 0 1-2.25 2.25h-1.5v2.128a2.251 2.251 0 1 1-1.5 0V8.5h-1.5A2.25 2.25 0 0 1 3.5 6.25v-.878a2.25 2.25 0 1 1 1.5 0ZM5 3.25a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Zm6.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-3 8.75a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Z"/></svg><span class="fork-text">fork of {forkParentTitle}</span></span>
+      {/if}
+      {#if forkChildren.length}
+        <span class="fork-pill" title={forkedTooltip}><svg class="fork-icon" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M5 5.372v.878c0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75v-.878a2.25 2.25 0 1 1 1.5 0v.878a2.25 2.25 0 0 1-2.25 2.25h-1.5v2.128a2.251 2.251 0 1 1-1.5 0V8.5h-1.5A2.25 2.25 0 0 1 3.5 6.25v-.878a2.25 2.25 0 1 1 1.5 0ZM5 3.25a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Zm6.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-3 8.75a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Z"/></svg>{forkedLabel}</span>
       {/if}
       {#if conversation.sidechainSteps?.length}
         <div class="sidechain-dots" title="Subagent activity">
@@ -687,6 +720,16 @@
   .git-icon { width: 12px; height: 12px; opacity: 0.8; }
   .branch-name { font-family: 'SF Mono', Menlo, Monaco, 'Courier New', monospace; font-size: 9px; }
   .agents-row { display: flex; margin-left: auto; }
+  .fork-pill {
+    display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
+    font-size: 10px; line-height: 14px; white-space: nowrap;
+    color: var(--vscode-descriptionForeground, #8c8c8c);
+    border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+    border-radius: 7px; padding: 0 5px;
+  }
+  .fork-pill.fork-of { flex-shrink: 1; min-width: 0; }
+  .fork-text { overflow: hidden; text-overflow: ellipsis; }
+  .fork-icon { width: 10px; height: 10px; flex-shrink: 0; }
 
   .action-btn {
     display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%;
