@@ -32,9 +32,9 @@
 >   close-and-reopen loop that stopped Claude from starting after an editor restart.
 > - **Titles:** cards use Claude Code's own session title; a rename (`custom-title`) wins over the generated `ai-title`.
 > - **Compact view:** the board opens in compact view; the toolbar button still switches to the full view.
-> - **Forks:** a forked session's card says `fork 1 of <parent>`, `fork 2 of <parent>`, … (numbered
->   in the order the forks were made), and the parent's card says `forked` (×N for several), so a
->   fork and its parent no longer look like one session twice.
+> - **Forks:** each card in a fork family gets a letter: `A` is the original, and every fork in the
+>   family takes the next letter in the order it was made. A fork's card shows `<parent>-<own>`, so
+>   `C-E` was forked from `C`. Hover a card's code for its parent and its forks.
 > - **Stars:** a star button on each card that cycles none → starred → paused → almost
 >   done (a red progress pie, and the card gets a red glow) → none, and Starred / Paused / Almost done filter chips, shared by all windows.
 > - **Parked column:** between In Review and Done, for sessions set aside for later (managers,

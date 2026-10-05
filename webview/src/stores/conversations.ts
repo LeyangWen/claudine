@@ -148,8 +148,12 @@ export interface ForkLinks {
   byId: Map<string, Conversation>;
   /** Parent id -> the forks made from it that are on the board, in the order they were made. */
   forks: Map<string, Conversation[]>;
-  /** Fork id -> its number among its parent's forks: 1 for the first one made. */
-  forkNumber: Map<string, number>;
+  /**
+   * Card id -> its letter in its fork family: A for the original, then B, C, ...
+   * for every fork in the family in the order they were made. Cards with no
+   * forks and no parent on the board have none.
+   */
+  letter: Map<string, string>;
 }
 
 /** Oldest fork first; a fork with no known fork time counts as the newest. */
@@ -162,6 +166,23 @@ function byForkTime(a: Conversation, b: Conversation): number {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
+/** Family letters in spreadsheet order: 0 -> A, 25 -> Z, 26 -> AA. */
+export function familyLetter(index: number): string {
+  let letters = '';
+  for (let n = index + 1; n > 0; n = Math.floor((n - 1) / 26)) {
+    letters = String.fromCharCode(65 + ((n - 1) % 26)) + letters;
+  }
+  return letters;
+}
+
+/** Lineage code: "A" for the original, "<parent letter>-<own letter>" for a fork. */
+export function lineageCode(links: ForkLinks, conv: Conversation): string | undefined {
+  const own = links.letter.get(conv.id);
+  if (!own) return undefined;
+  const parent = conv.forkedFrom ? links.letter.get(conv.forkedFrom) : undefined;
+  return parent ? `${parent}-${own}` : own;
+}
+
 /** Fork links between cards, from each fork's forkedFrom. */
 export const forkLinks = derived(conversations, ($conversations): ForkLinks => {
   const byId = new Map($conversations.map(c => [c.id, c]));
@@ -172,12 +193,33 @@ export const forkLinks = derived(conversations, ($conversations): ForkLinks => {
     if (list) list.push(c);
     else forks.set(c.forkedFrom, [c]);
   }
-  const forkNumber = new Map<string, number>();
-  for (const list of forks.values()) {
-    list.sort(byForkTime);
-    list.forEach((c, i) => forkNumber.set(c.id, i + 1));
+  for (const list of forks.values()) list.sort(byForkTime);
+
+  // A family is everything forked, directly or not, from one card whose own
+  // parent is not on the board (the original).
+  const rootOf = (c: Conversation): Conversation => {
+    const seen = new Set<string>();
+    while (c.forkedFrom && byId.has(c.forkedFrom) && !seen.has(c.id)) {
+      seen.add(c.id);
+      c = byId.get(c.forkedFrom)!;
+    }
+    return c;
+  };
+  const families = new Map<string, Conversation[]>();
+  for (const c of $conversations) {
+    if (!c.forkedFrom || !byId.has(c.forkedFrom)) continue;
+    const root = rootOf(c);
+    const members = families.get(root.id);
+    if (members) members.push(c);
+    else families.set(root.id, [c]);
   }
-  return { byId, forks, forkNumber };
+  const letter = new Map<string, string>();
+  for (const [rootId, members] of families) {
+    letter.set(rootId, familyLetter(0));
+    members.sort(byForkTime);
+    members.forEach((c, i) => letter.set(c.id, familyLetter(i + 1)));
+  }
+  return { byId, forks, letter };
 });
 
 /** The parent's title when the fork was made: Claude Code appends " (fork)". */
