@@ -272,6 +272,39 @@ describe('KanbanViewProvider — regression tests', () => {
     });
   });
 
+  // The card's Move to Done arrow sends interrupt: false; dragging a card to Done does not.
+  describe('moveConversation interrupt', () => {
+    let view: MockWebviewView;
+    let token: string;
+    const window = vscode.window as unknown as { terminals?: unknown[] };
+
+    beforeEach(() => {
+      window.terminals = [];
+      view = createMockWebviewView('claudine.kanbanView');
+      provider.resolveWebviewView(view as never, {} as never, {} as never);
+      token = extractTokenFromHtml(view.webview.html);
+      mockStateManager.getConversation.mockReturnValue(makeConversation({ id: 'run', status: 'in-progress' }));
+    });
+
+    afterEach(() => {
+      delete window.terminals;
+    });
+
+    it('interrupts a running session dragged to Done', async () => {
+      view.emitMessage({ type: 'moveConversation', conversationId: 'run', newStatus: 'done', _token: token });
+      await Promise.resolve();
+      expect(tabManagerInstances.at(-1)!.focusAnyClaudeTab).toHaveBeenCalled();
+      expect(mockStateManager.moveConversation).toHaveBeenCalledWith('run', 'done');
+    });
+
+    it('leaves a running session alone when interrupt is false', async () => {
+      view.emitMessage({ type: 'moveConversation', conversationId: 'run', newStatus: 'done', interrupt: false, _token: token });
+      await Promise.resolve();
+      expect(tabManagerInstances.at(-1)!.focusAnyClaudeTab).not.toHaveBeenCalled();
+      expect(mockStateManager.moveConversation).toHaveBeenCalledWith('run', 'done');
+    });
+  });
+
   // BUG4d — placement is VS Code-managed, so deprecated viewLocation writes must be ignored.
   describe('BUG4d — deprecated viewLocation setting writes are ignored', () => {
     it('does not persist viewLocation when webview sends updateSetting', async () => {

@@ -52,6 +52,8 @@ export const searchMode = writable<'fade' | 'hide'>('fade');
 export const focusedConversationId = writable<string | null>(null);
 // Compact view is on when the board opens; the toolbar button switches to full view.
 export const compactView = writable(true);
+// The category filter bar is open when the board opens; its toolbar button closes it.
+export const filterBarOpen = writable(true);
 export const collapsedCardIds = writable<Set<string>>(new Set());
 
 // Category filter: empty set = show all, non-empty = show only selected

@@ -146,7 +146,7 @@ export class KanbanViewProvider implements vscode.WebviewViewProvider {
         break;
 
       case 'moveConversation':
-        if (message.newStatus === 'done' || message.newStatus === 'cancelled') {
+        if ((message.newStatus === 'done' || message.newStatus === 'cancelled') && message.interrupt !== false) {
           this.interruptConversation(message.conversationId);
         }
         this._stateManager.moveConversation(message.conversationId, message.newStatus);

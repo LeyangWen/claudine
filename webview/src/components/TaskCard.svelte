@@ -1,6 +1,6 @@
 <script lang="ts">
   import { vscode, type Conversation } from '../lib/vscode';
-  import { getCategoryDetails, toggleCardCollapsed, settings, upsertConversation, nextStar, forkLinks, parentTitleOf, lineageCode } from '../stores/conversations';
+  import { getCategoryDetails, toggleCardCollapsed, compactView, settings, upsertConversation, nextStar, forkLinks, parentTitleOf, lineageCode } from '../stores/conversations';
   import AgentAvatar from './AgentAvatar.svelte';
   import PromptInput from './PromptInput.svelte';
 
@@ -164,6 +164,17 @@
     // Optimistic update. Board columns come from their own store, so go
     // through upsertConversation rather than updating `conversations` alone.
     upsertConversation({ ...conversation, star: nextStar(conversation.star) });
+  }
+
+  // The arrow at the right end of a card sends it to Done. Unlike dragging it
+  // there, it leaves a running session alone: a stray click on a small hover
+  // button must not interrupt an agent. If the session is still working, its
+  // next message brings the card back out of Done.
+  function handleMoveToDone(e: MouseEvent) {
+    e.stopPropagation();
+    if (conversation.isDraft) return;
+    vscode.postMessage({ type: 'moveConversation', conversationId: conversation.id, newStatus: 'done', interrupt: false });
+    upsertConversation({ ...conversation, status: 'done' });
   }
 
   function handleOpenConversation() {
@@ -368,9 +379,17 @@
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.4l1.7 4.65 4.96.19-3.9 3.06 1.35 4.76L8 11.3l-4.11 2.76 1.35-4.76-3.9-3.06 4.96-.19z"/></svg>
       {/if}
     </button>
-    <button class="collapse-toggle" on:click={handleToggleCollapse} title="Expand card">
-      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M5.7 13.7L5 13l4.6-4.6L5 3.7l.7-.7 5.3 5.3-5.3 5.4z"/></svg>
-    </button>
+    <!-- With compact view on every card is compact, so the chevron would do nothing. -->
+    {#if !$compactView}
+      <button class="collapse-toggle" on:click={handleToggleCollapse} title="Expand card">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M5.7 13.7L5 13l4.6-4.6L5 3.7l.7-.7 5.3 5.3-5.3 5.4z"/></svg>
+      </button>
+    {/if}
+    {#if conversation.status !== 'done'}
+      <button class="done-btn" on:click={handleMoveToDone} title="Move to Done" aria-label="Move to Done">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 8a.5.5 0 0 1 .5-.5h8.793L7.146 4.354a.5.5 0 1 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L10.293 8.5H1.5A.5.5 0 0 1 1 8Z"/><path d="M13.5 3a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-1 0v-9a.5.5 0 0 1 .5-.5Z"/></svg>
+      </button>
+    {/if}
   </div>
 
 {:else}
@@ -456,9 +475,16 @@
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.4l1.7 4.65 4.96.19-3.9 3.06 1.35 4.76L8 11.3l-4.11 2.76 1.35-4.76-3.9-3.06 4.96-.19z"/></svg>
         {/if}
       </button>
-      <button class="collapse-toggle" on:click={handleToggleCollapse} title="Collapse card">
-        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M10.3 2.3L11 3 6.4 7.6 11 12.3l-.7.7L5 7.7l5.3-5.4z"/></svg>
-      </button>
+      {#if !$compactView}
+        <button class="collapse-toggle" on:click={handleToggleCollapse} title="Collapse card">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M10.3 2.3L11 3 6.4 7.6 11 12.3l-.7.7L5 7.7l5.3-5.4z"/></svg>
+        </button>
+      {/if}
+      {#if conversation.status !== 'done'}
+        <button class="done-btn" on:click={handleMoveToDone} title="Move to Done" aria-label="Move to Done">
+          <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M1 8a.5.5 0 0 1 .5-.5h8.793L7.146 4.354a.5.5 0 1 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L10.293 8.5H1.5A.5.5 0 0 1 1 8Z"/><path d="M13.5 3a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-1 0v-9a.5.5 0 0 1 .5-.5Z"/></svg>
+        </button>
+      {/if}
     </div>
 
     <!-- Description (click to expand) -->
@@ -840,14 +866,14 @@
   }
 
   /* ---- Collapse toggle ---- */
-  .collapse-toggle {
+  .collapse-toggle, .done-btn {
     flex-shrink: 0; width: 16px; height: 16px;
     background: none; border: none; cursor: pointer; padding: 0;
     color: var(--vscode-disabledForeground, #6b6b6b);
     opacity: 0; transition: opacity 0.15s;
     display: flex; align-items: center; justify-content: center;
   }
-  .collapse-toggle svg { width: 12px; height: 12px; }
+  .collapse-toggle svg, .done-btn svg { width: 12px; height: 12px; }
 
   .star-btn {
     flex-shrink: 0;
@@ -882,6 +908,8 @@
   .narrow-star.almost-done svg { width: 13px; height: 13px; }
   .task-card:hover .collapse-toggle { opacity: 0.6; }
   .collapse-toggle:hover { opacity: 1 !important; color: var(--vscode-foreground, #cccccc); }
+  .task-card:hover .done-btn { opacity: 0.6; }
+  .done-btn:hover, .done-btn:focus-visible { opacity: 1 !important; color: #10b981; }
 
   /* ---- Narrow card (column-collapsed view) ---- */
   .task-card.narrow-card {

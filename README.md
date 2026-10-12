@@ -32,6 +32,11 @@
 >   close-and-reopen loop that stopped Claude from starting after an editor restart.
 > - **Titles:** cards use Claude Code's own session title; a rename (`custom-title`) wins over the generated `ai-title`.
 > - **Compact view:** the board opens in compact view; the toolbar button still switches to the full view.
+> - **Move to Done:** the arrow at the right end of each card (→|) sends it to Done in one click.
+> It never interrupts a running session (dragging to Done still does); a session that is still
+> working comes back out of Done with its next message. With compact view on, the expand chevron
+> it replaced is gone, since it did nothing there.
+> - **Filter bar:** the category filter bar is open when the board opens.
 > - **Forks:** each card in a fork family gets a letter: `A` is the original, and every fork in the
 >   family takes the next letter in the order it was made. A fork's card shows `<parent>-<own>`, so
 >   `C-E` was forked from `C`. Hover a card's code for its parent and its forks.

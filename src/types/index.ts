@@ -117,7 +117,8 @@ export type WebviewToExtensionMessage =
   | { type: 'openConversationAs'; conversationId: string; target: OpenConversationTarget }
   | { type: 'openGitBranch'; conversationId: string; branch?: string }
   | { type: 'cycleStar'; conversationId: string }
-  | { type: 'moveConversation'; conversationId: string; newStatus: ConversationStatus }
+  // interrupt: false moves a running session to done/cancelled without stopping it.
+  | { type: 'moveConversation'; conversationId: string; newStatus: ConversationStatus; interrupt?: boolean }
   | { type: 'refreshConversations' }
   | { type: 'toggleSummarization' }
   | { type: 'updateSetting'; key: string; value: unknown }

@@ -7,7 +7,7 @@
   import {
     settings, addError, setConversations, upsertConversation, removeConversations,
     appendProjectConversations,
-    focusedConversationId, searchQuery, searchMode, compactView,
+    focusedConversationId, searchQuery, searchMode, compactView, filterBarOpen,
     extensionSearchMatchIds, loadDraftsFromExtension,
     expandAllCards, collapseAllCards,
     activeCategories, toggleCategory, clearCategoryFilter, getCategoryDetails, starMarks,
@@ -22,7 +22,6 @@
   import { themePreference, resolvedTheme, cycleTheme } from './stores/theme';
 
   let searchOpen = false;
-  let filterOpen = false;
   let settingsOpen = false;
   let aboutOpen = false;
   let showArchive = false;
@@ -147,8 +146,8 @@
   }
 
   function toggleFilter() {
-    filterOpen = !filterOpen;
-    if (!filterOpen) clearCategoryFilter();
+    $filterBarOpen = !$filterBarOpen;
+    if (!$filterBarOpen) clearCategoryFilter();
   }
 
   function toggleCompact() {
@@ -246,7 +245,7 @@
       <button class="sidebar-btn" class:active={searchOpen} on:click={toggleSearch} title="Search conversations" aria-label="Search conversations" aria-pressed={searchOpen}>
         <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M10.02 10.727a5.5 5.5 0 1 1 .707-.707l3.127 3.126a.5.5 0 0 1-.708.708l-3.127-3.127ZM11 6.5a4.5 4.5 0 1 0-9 0 4.5 4.5 0 0 0 9 0Z"/></svg>
       </button>
-      <button class="sidebar-btn" class:active={filterOpen || $activeCategories.size > 0} on:click={toggleFilter} title="Filter by category" aria-label="Filter by category" aria-pressed={filterOpen}>
+      <button class="sidebar-btn" class:active={$filterBarOpen || $activeCategories.size > 0} on:click={toggleFilter} title="Filter by category" aria-label="Filter by category" aria-pressed={$filterBarOpen}>
         <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M9.5 14h-3a.5.5 0 0 1-.5-.5V9.329c0-.401-.156-.777-.439-1.061l-4-4A1.915 1.915 0 0 1 2.914 1h10.172a1.915 1.915 0 0 1 1.353 3.267l-4 4c-.283.284-.439.66-.439 1.061v4.171a.5.5 0 0 1-.5.5V14ZM7 13h2V9.329c0-.668.26-1.296.732-1.768l4-4a.915.915 0 0 0-.646-1.56H2.914a.915.915 0 0 0-.646 1.561l4 4c.473.472.732 1.1.732 1.768v3.671V13Z"/></svg>
       </button>
       <button class="sidebar-btn" class:active={$compactView} on:click={toggleCompact} title="Toggle compact / full view" aria-label="Toggle compact or full view" aria-pressed={$compactView}>
@@ -326,7 +325,7 @@
         </button>
       </div>
     {/if}
-    {#if filterOpen}
+    {#if $filterBarOpen}
       <div class="filter-bar">
         <svg class="filter-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.128.334L10 8.692V13.5a.5.5 0 0 1-.342.474l-3 1A.5.5 0 0 1 6 14.5V8.692L1.628 3.834A.5.5 0 0 1 1.5 3.5v-2z"/></svg>
         <div class="filter-chips">
