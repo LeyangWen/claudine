@@ -19,6 +19,9 @@ const EXCLUDED_PATH_PATTERNS = [
   /\\Recycle\.Bin\\/i,      // Windows Recycle Bin
 ];
 
+/** Claude Code caps a project directory name at this many characters. */
+const MAX_PROJECT_DIR_NAME_LENGTH = 200;
+
 export class ClaudeCodeWatcher {
   private _watcherDisposable: Disposable | undefined;
   private _parser: ConversationParser;
@@ -259,7 +262,7 @@ export class ClaudeCodeWatcher {
 
   private isFromExcludedWorkspace(filePath: string): boolean {
     if (!this._excludedWorkspacePath) return false;
-    const encodedExcluded = this.encodeWorkspacePath(this._excludedWorkspacePath);
+    const encodedExcluded = ClaudeCodeWatcher.encodeWorkspacePath(this._excludedWorkspacePath);
     return filePath.includes(`${path.sep}${encodedExcluded}${path.sep}`);
   }
 
@@ -271,7 +274,7 @@ export class ClaudeCodeWatcher {
 
     for (const folder of workspaceFolders) {
       if (this._excludedWorkspacePath && folder === this._excludedWorkspacePath) continue;
-      const encodedPath = this.encodeWorkspacePath(folder);
+      const encodedPath = ClaudeCodeWatcher.encodeWorkspacePath(folder);
       if (filePath.includes(`${path.sep}${encodedPath}${path.sep}`)) return true;
     }
     return false;
@@ -342,7 +345,7 @@ export class ClaudeCodeWatcher {
             continue;
           }
 
-          const encodedPath = this.encodeWorkspacePath(folder);
+          const encodedPath = ClaudeCodeWatcher.encodeWorkspacePath(folder);
           const projectDir = path.join(projectsPath, encodedPath);
 
           console.log(`Claudine: Workspace "${folder}" → encoded "${encodedPath}"`);
@@ -378,11 +381,19 @@ export class ClaudeCodeWatcher {
   /**
    * Encode a workspace path the same way Claude Code does.
    * /Users/matthias/Development/foo → -Users-matthias-Development-foo
-   * Claude Code also replaces dots, so /Users/a/.claude/worktrees/x becomes
-   * -Users-a--claude-worktrees-x; encoding only slashes misses those projects.
+   * Claude Code replaces every character other than A-Z, a-z and 0-9, so
+   * /Users/a/.claude/worktrees/x becomes -Users-a--claude-worktrees-x and
+   * /home/a/my_repo becomes -home-a-my-repo. A name longer than 200
+   * characters is cut to 200 and suffixed with a hash of the full path.
    */
-  private encodeWorkspacePath(workspacePath: string): string {
-    return workspacePath.replace(/[\/.]/g, '-');
+  public static encodeWorkspacePath(workspacePath: string): string {
+    const encoded = workspacePath.replace(/[^a-zA-Z0-9]/g, '-');
+    if (encoded.length <= MAX_PROJECT_DIR_NAME_LENGTH) return encoded;
+    let hash = 0;
+    for (let i = 0; i < workspacePath.length; i++) {
+      hash = ((hash << 5) - hash + workspacePath.charCodeAt(i)) | 0;
+    }
+    return `${encoded.slice(0, MAX_PROJECT_DIR_NAME_LENGTH)}-${Math.abs(hash).toString(36)}`;
   }
 
   // ── Project discovery & progressive scanning (standalone) ─────────

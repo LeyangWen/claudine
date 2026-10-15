@@ -430,6 +430,28 @@ describe('ClaudeCodeWatcher — regression tests', () => {
     });
   });
 
+  // ---------- encodeWorkspacePath ----------
+
+  describe('encodeWorkspacePath (static)', () => {
+    it('replaces slashes and dots', () => {
+      expect(ClaudeCodeWatcher.encodeWorkspacePath('/Users/a/.claude/worktrees/x'))
+        .toBe('-Users-a--claude-worktrees-x');
+    });
+
+    it('replaces underscores and other non-alphanumerics like Claude Code', () => {
+      expect(ClaudeCodeWatcher.encodeWorkspacePath('/home/leyang/developer/pattern_search_cog_floorplan'))
+        .toBe('-home-leyang-developer-pattern-search-cog-floorplan');
+      expect(ClaudeCodeWatcher.encodeWorkspacePath('C:\\Users\\a b\\proj'))
+        .toBe('C--Users-a-b-proj');
+    });
+
+    it('caps long names at 200 characters plus a hash', () => {
+      const long = '/' + 'a'.repeat(250);
+      const encoded = ClaudeCodeWatcher.encodeWorkspacePath(long);
+      expect(encoded).toMatch(/^-a{199}-[0-9a-z]+$/);
+    });
+  });
+
   // ---------- decodeProjectDirName ----------
 
   describe('decodeProjectDirName (static)', () => {
